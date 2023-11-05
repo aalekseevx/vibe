@@ -1,0 +1,8 @@
+port: 8080
+
+video_paths:
+  - output240p.ivf
+  - output360p.ivf
+  - output480p.ivf
+
+ice_server: stun:stun.l.google.com:19302
