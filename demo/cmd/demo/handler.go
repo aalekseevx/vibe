@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bwe/demo/pkg/attr"
 	"context"
 	"errors"
 	"fmt"
@@ -23,14 +24,14 @@ type Handler struct {
 func (h Handler) Watch(ws *websocket.Conn) {
 	pc, err := h.PeerConnectionFactory.New()
 	if err != nil {
-		slog.Error("new peer connection", ErrAttr(err))
+		slog.Error("new peer connection", attr.Error(err))
 		return
 	}
 
 	defer func() {
 		err = pc.Close()
 		if err != nil {
-			slog.Error("close peer connection", ErrAttr(err))
+			slog.Error("close peer connection", attr.Error(err))
 		}
 	}()
 
@@ -39,27 +40,27 @@ func (h Handler) Watch(ws *websocket.Conn) {
 	for _, videoFileName := range h.VideoPaths {
 		err = startTrack(pc, videoFileName, iceConnectedCtx)
 		if err != nil {
-			slog.Error("start track", ErrAttr(err))
+			slog.Error("start track", attr.Error(err))
 		}
 	}
 
 	pc.OnSignalingStateChange(func(state webrtc.SignalingState) {
-		slog.Info("signaling state changed", StateAttr(state))
+		slog.Info("signaling state changed", attr.State(state))
 	})
 
 	pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
-		slog.Info("ice gathering state changed", StateAttr(state))
+		slog.Info("ice gathering state changed", attr.State(state))
 	})
 
 	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		slog.Info("ice connection state changed", StateAttr(state))
+		slog.Info("ice connection state changed", attr.State(state))
 		if state == webrtc.ICEConnectionStateConnected {
 			iceConnectedCtxCancel()
 		}
 	})
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		slog.Info("connection state changed", StateAttr(state))
+		slog.Info("connection state changed", attr.State(state))
 
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed {
 			return
@@ -68,12 +69,12 @@ func (h Handler) Watch(ws *websocket.Conn) {
 
 	offer, err := pc.CreateOffer(nil)
 	if err != nil {
-		slog.Error("create offer", ErrAttr(err))
+		slog.Error("create offer", attr.Error(err))
 		return
 	}
 
 	if err = pc.SetLocalDescription(offer); err != nil {
-		slog.Error("set local description", ErrAttr(err))
+		slog.Error("set local description", attr.Error(err))
 		return
 	}
 
@@ -82,24 +83,27 @@ func (h Handler) Watch(ws *websocket.Conn) {
 
 	err = websocket.JSON.Send(ws, pc.LocalDescription())
 	if err != nil {
-		slog.Error("send local description", ErrAttr(err))
+		slog.Error("send local description", attr.Error(err))
 		return
 	}
 
 	var answer webrtc.SessionDescription
 	err = websocket.JSON.Receive(ws, &answer)
 	if err != nil {
-		slog.Error("receive remote description", ErrAttr(err))
+		slog.Error("receive remote description", attr.Error(err))
 		return
 	}
 
 	err = pc.SetRemoteDescription(answer)
 	if err != nil {
-		slog.Error("set remote description", ErrAttr(err))
+		slog.Error("set remote description", attr.Error(err))
 		return
 	}
 
-	websocket.JSON.Receive(ws, nil)
+	err = websocket.JSON.Receive(ws, nil)
+	if err != nil {
+		slog.Error("wait socket closed", attr.Error(err))
+	}
 }
 
 func startTrack(pc *webrtc.PeerConnection, videoPath string, iceConnectedCtx context.Context) error {
@@ -155,12 +159,12 @@ func startTrack(pc *webrtc.PeerConnection, videoPath string, iceConnectedCtx con
 			}
 
 			if ivfErr != nil {
-				slog.Error("read ivf", ErrAttr(err))
+				slog.Error("read ivf", attr.Error(err))
 				return
 			}
 
 			if ivfErr = videoTrack.WriteSample(media.Sample{Data: frame, Duration: time.Second}); ivfErr != nil {
-				slog.Error("write sample", ErrAttr(err))
+				slog.Error("write sample", attr.Error(err))
 				return
 			}
 		}

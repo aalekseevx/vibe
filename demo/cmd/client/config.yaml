@@ -1,0 +1,5 @@
+endpoint: ws://84.252.131.65/watch
+ice_server: stun:stun.l.google.com:19302
+report_file: report.log
+session_duration: 60s
+report_interval: 1s
