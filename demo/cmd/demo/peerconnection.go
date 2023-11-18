@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -25,8 +26,11 @@ func newPeerConnectionFactory(config Config) (PeerConnectionFactory, error) {
 		return PeerConnectionFactory{}, fmt.Errorf("register default interceptors: %w", err)
 	}
 
+	se := webrtc.SettingEngine{}
+	se.LoggerFactory = logging.NewDefaultLoggerFactory()
+
 	return PeerConnectionFactory{
-		api:       webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir)),
+		api:       webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir), webrtc.WithSettingEngine(se)),
 		iceServer: config.IceServer,
 	}, nil
 }

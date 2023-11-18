@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bwe/demo/pkg/attr"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,13 +12,13 @@ import (
 func main() {
 	config, err := LoadConfig()
 	if err != nil {
-		slog.Error("load config", ErrAttr(err))
+		slog.Error("load config", attr.Error(err))
 		return
 	}
 
 	pcFactory, err := newPeerConnectionFactory(config)
 	if err != nil {
-		slog.Error("new peer connection factory", ErrAttr(err))
+		slog.Error("new peer connection factory", attr.Error(err))
 		return
 	}
 	handler := Handler{
@@ -29,7 +30,7 @@ func main() {
 
 	err = http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil)
 	if err != nil {
-		slog.Error("listen and serve", ErrAttr(err))
+		slog.Error("listen and serve", attr.Error(err))
 		return
 	}
 }
