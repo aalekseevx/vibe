@@ -1,0 +1,9 @@
+[submodule "ns3"]
+	path = ns3
+	url = https://gitlab.com/nsnam/ns-3-dev.git
+[submodule "ns3-rmcat"]
+	path = ns3-rmcat
+	url = https://github.com/cisco/ns3-rmcat.git
+[submodule "webrtc"]
+	path = webrtc
+	url = https://chromium.googlesource.com/external/webrtc

@@ -2,3 +2,5 @@
 *.ivf
 *.mp4
 .ipynb_checkpoints
+cmake-build-debug
+CMakeFiles
