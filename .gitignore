@@ -4,3 +4,4 @@
 .ipynb_checkpoints
 cmake-build-debug
 CMakeFiles
+.DS_Store

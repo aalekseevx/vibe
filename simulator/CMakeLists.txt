@@ -1,21 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
-project(MyProject)
+project(Simulator)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# Define the NS3 directory variable
-set(NS3_DIR /Users/alekseev-dev/vibe/ns3/build)
-
-set(NS3_INCLUDES "${NS3_DIR}/include")
-
-file(GLOB LIBRARIES ${NS3_DIR}/lib/*.dylib)
-message("LIBRARIES = ${LIBRARIES}")
+add_subdirectory(cisco)
 
 # Create a new CMake target for the executable
 add_executable(simulator simulator.cpp)
 
-include_directories(${NS3_INCLUDES})
-link_libraries(${NS3_DIR}/lib)
+target_link_libraries(simulator syncodecs)
 
-target_link_libraries(simulator ${LIBRARIES})
-
+file(GLOB NS3_LIBRARIES ${NS3_INSTALL_DIR}/lib/*)
+include_directories(${NS3_INSTALL_DIR}/include)
+target_link_libraries(simulator ${NS3_LIBRARIES})
