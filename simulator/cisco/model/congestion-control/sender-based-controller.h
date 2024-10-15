@@ -174,7 +174,7 @@ public:
 
     /**
      * This API call will reset the internal state of the congestion
-     * controller. The new state will be the same as that of a freshly
+     * controller.h The new state will be the same as that of a freshly
      * instantiated controller object
      */
     virtual void reset();
@@ -258,7 +258,7 @@ public:
     /**
      * The sender application will call this function every time it needs to
      * know what is the current bandwidth as estimated by the congestion
-     * controller. The bandwidth information is typically used to have the
+     * controller.h The bandwidth information is typically used to have the
      * media codecs adapt to the current (estimated) available bandwidth
      *
      * @param [in] nowUs The time at which this function is called, in microseconds

@@ -33,7 +33,7 @@
 namespace rmcat {
 
 /**
- * Simplistic implementation of a sender-based congestion controller. The
+ * Simplistic implementation of a sender-based congestion controller.h The
  * algorithm simply returns a constant, hard-coded bandwidth when queried.
  */
 class DummyController: public SenderBasedController

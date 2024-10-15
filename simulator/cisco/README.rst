@@ -1,9 +1,10 @@
-.. contents::
-
-This code from cisco [repository](https://github.com/cisco/ns3-rmcat) is ported to C++20 with CMake.
+This code from cisco [repository](https://github.com/cisco/ns3-rmcat) is ported to C++20 with CMake and some bugs are fixed.
 
 Below is the original documentation
 
+
+
+.. contents::
 
 ns3-rmcat Documentation
 ----------------------------

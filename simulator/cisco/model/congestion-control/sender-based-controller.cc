@@ -18,7 +18,7 @@
 /**
  * @file
  * Partial implementation of abstract class representing the interface to a
- * sender-based controller.
+ * sender-based controller.h
  *
  * @version 0.1.1
  * @author Jiantao Fu
