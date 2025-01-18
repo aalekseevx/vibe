@@ -1,5 +1,7 @@
 ## VIBE: VIdeoBitrateEstimator for pion
 
+### Also check out related [bwe-test repo](https://github.com/pion/bwe-test)
+
 We aim at creating pluggable set of interceptors that work with [pion](https://github.com/pion/webrtc) for accurate 
 bandwith estimation and simulcast resolving in dynamic network conditions.
 
