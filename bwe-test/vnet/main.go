@@ -36,50 +36,50 @@ const (
 )
 
 func main() {
-	synctest.Run(func() {
-		simulation()
-		synctest.Wait()
-	})
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
 
-	//simulation()
+	if config.UseSyncTest {
+		synctest.Run(func() {
+			simulation(config)
+			synctest.Wait()
+		})
+	} else {
+		simulation(config)
+	}
 }
 
-func simulation() {
-	logLevel := flag.String("log", "info", "Log level")
-	flag.Parse()
-
-	loggerFactory, err := getLoggerFactory(*logLevel)
+func simulation(config Config) {
+	loggerFactory, err := getLoggerFactory(config.LogLevel)
 	if err != nil {
 		log.Fatalf("get logger factory: %v", err)
 	}
 
-	testCases := []struct {
-		name       string
-		senderMode senderMode
-		flowMode   flowMode
-	}{
-		{
-			name:       "TestVnetRunnerABR/VariableAvailableCapacitySingleFlow",
-			senderMode: abrSenderMode,
-			flowMode:   singleFlowMode,
-		},
-		{
-			name:       "TestVnetRunnerABR/VariableAvailableCapacityMultipleFlows",
-			senderMode: abrSenderMode,
-			flowMode:   multipleFlowsMode,
-		},
-	}
-
 	logger := loggerFactory.NewLogger("bwe_test_runner")
-	for _, t := range testCases {
-		runner := Runner{
-			loggerFactory: loggerFactory,
-			logger:        logger,
-			name:          t.name,
-			senderMode:    t.senderMode,
-			flowMode:      t.flowMode,
+	for _, testCase := range config.TestCases {
+		senderMode, err := ParseSenderMode(testCase.SenderMode)
+		if err != nil {
+			logger.Errorf("parse sender mode: %v", err)
+			continue
 		}
-		err := runner.Run()
+
+		flowMode, err := ParseFlowMode(testCase.FlowMode)
+		if err != nil {
+			logger.Errorf("parse flow mode: %v", err)
+			continue
+		}
+
+		runner := Runner{
+			loggerFactory:      loggerFactory,
+			logger:             logger,
+			name:               testCase.Name,
+			senderMode:         senderMode,
+			flowMode:           flowMode,
+			pathCharacteristic: testCase.PathCharacteristic,
+		}
+		err = runner.Run()
 		if err != nil {
 			logger.Errorf("runner: %v", err)
 		}
@@ -114,11 +114,12 @@ func getLoggerFactory(logLevel string) (*logging.DefaultLoggerFactory, error) {
 
 // Runner manages the execution of bandwidth estimation tests.
 type Runner struct {
-	loggerFactory *logging.DefaultLoggerFactory
-	logger        logging.LeveledLogger
-	name          string
-	senderMode    senderMode
-	flowMode      flowMode
+	loggerFactory      *logging.DefaultLoggerFactory
+	logger             logging.LeveledLogger
+	name               string
+	senderMode         senderMode
+	flowMode           flowMode
+	pathCharacteristic PathCharacteristic
 }
 
 var errUnknownFlowMode = errors.New("unknown flow mode")
@@ -175,32 +176,8 @@ func (r *Runner) runVariableAvailableCapacitySingleFlow() error {
 		}
 	}()
 
-	path := pathCharacteristics{
-		referenceCapacity: 1 * vnet.MBit,
-		phases: []phase{
-			{
-				duration:      40 * time.Second,
-				capacityRatio: 1.0,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      20 * time.Second,
-				capacityRatio: 2.5,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      20 * time.Second,
-				capacityRatio: 0.6,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      20 * time.Second,
-				capacityRatio: 1.0,
-				maxBurst:      160 * vnet.KBit,
-			},
-		},
-	}
-	r.runNetworkSimulation(path, nm)
+	phases := r.pathCharacteristic.ToPhases()
+	r.runNetworkSimulation(phases, nm)
 
 	return nil
 }
@@ -236,60 +213,16 @@ func (r *Runner) runVariableAvailableCapacityMultipleFlows() error {
 		}()
 	}
 
-	path := pathCharacteristics{
-		referenceCapacity: 1 * vnet.MBit,
-		phases: []phase{
-			{
-				duration:      25 * time.Second,
-				capacityRatio: 2.0,
-				maxBurst:      160 * vnet.KBit,
-			},
-
-			{
-				duration:      25 * time.Second,
-				capacityRatio: 1.0,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      25 * time.Second,
-				capacityRatio: 1.75,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      25 * time.Second,
-				capacityRatio: 0.5,
-				maxBurst:      160 * vnet.KBit,
-			},
-			{
-				duration:      25 * time.Second,
-				capacityRatio: 1.0,
-				maxBurst:      160 * vnet.KBit,
-			},
-		},
-	}
-	r.runNetworkSimulation(path, nm)
+	r.runNetworkSimulation(r.pathCharacteristic.Phases, nm)
 
 	return nil
 }
 
-// pathCharacteristics defines the network characteristics for the test.
-type pathCharacteristics struct {
-	referenceCapacity int
-	phases            []phase
-}
-
-// phase defines a single phase of the network simulation with specific characteristics.
-type phase struct {
-	duration      time.Duration
-	capacityRatio float64
-	maxBurst      int
-}
-
-func (r *Runner) runNetworkSimulation(c pathCharacteristics, nm *NetworkManager) {
-	for _, phase := range c.phases {
+func (r *Runner) runNetworkSimulation(phases []PhaseConfig, nm *NetworkManager) {
+	for _, phase := range phases {
 		r.logger.Infof("enter next phase: %v", phase)
 		nm.SetCapacity(
-			int(float64(c.referenceCapacity)*phase.capacityRatio),
+			phase.capacity,
 			phase.maxBurst,
 		)
 		time.Sleep(phase.duration)
