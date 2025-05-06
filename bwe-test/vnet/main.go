@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"github.com/pion/logging"
-	"github.com/pion/transport/v3/vnet"
 )
 
 // senderMode defines the type of sender to use in the test.
@@ -176,8 +174,7 @@ func (r *Runner) runVariableAvailableCapacitySingleFlow() error {
 		}
 	}()
 
-	phases := r.pathCharacteristic.ToPhases()
-	r.runNetworkSimulation(phases, nm)
+	r.runNetworkSimulation(r.pathCharacteristic.Phases, nm)
 
 	return nil
 }
@@ -222,9 +219,9 @@ func (r *Runner) runNetworkSimulation(phases []PhaseConfig, nm *NetworkManager) 
 	for _, phase := range phases {
 		r.logger.Infof("enter next phase: %v", phase)
 		nm.SetCapacity(
-			phase.capacity,
-			phase.maxBurst,
+			phase.Capacity,
+			phase.MaxBurst,
 		)
-		time.Sleep(phase.duration)
+		time.Sleep(phase.Duration)
 	}
 }

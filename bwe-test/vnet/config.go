@@ -9,22 +9,21 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/transport/v3/vnet"
 	"gopkg.in/yaml.v3"
 )
 
 // Config represents the YAML configuration for the bandwidth estimation tests.
 type Config struct {
-	LogLevel   string     `yaml:"log_level"`
-	UseSyncTest bool      `yaml:"use_sync_test"`
-	TestCases  []TestCase `yaml:"test_cases"`
+	LogLevel    string     `yaml:"log_level"`
+	UseSyncTest bool       `yaml:"use_sync_test"`
+	TestCases   []TestCase `yaml:"test_cases"`
 }
 
 // TestCase defines a single test case configuration.
 type TestCase struct {
-	Name             string              `yaml:"name"`
-	SenderMode       string              `yaml:"sender_mode"`
-	FlowMode         string              `yaml:"flow_mode"`
+	Name               string             `yaml:"name"`
+	SenderMode         string             `yaml:"sender_mode"`
+	FlowMode           string             `yaml:"flow_mode"`
 	PathCharacteristic PathCharacteristic `yaml:"path_characteristic"`
 }
 
@@ -35,25 +34,25 @@ type PathCharacteristic struct {
 
 // PhaseConfig defines a single phase of the network simulation with specific characteristics.
 type PhaseConfig struct {
-	Duration  time.Duration `yaml:"duration"`
-	Capacity  int           `yaml:"capacity"`
-	MaxBurst  int           `yaml:"max_burst"`
+	Duration time.Duration `yaml:"duration"`
+	Capacity int           `yaml:"capacity"`
+	MaxBurst int           `yaml:"max_burst"`
 }
 
 // LoadConfig loads the configuration from a YAML file.
 func LoadConfig() (Config, error) {
 	configPath := flag.String("config", "", "path to config")
 	flag.Parse()
-	
+
 	if *configPath == "" {
 		return Config{}, fmt.Errorf("config path is required")
 	}
-	
+
 	configBytes, err := os.ReadFile(*configPath)
 	if err != nil {
 		return Config{}, fmt.Errorf("read file: %w", err)
 	}
-	
+
 	var config Config
 	err = yaml.Unmarshal(configBytes, &config)
 	if err != nil {
