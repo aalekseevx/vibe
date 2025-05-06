@@ -71,7 +71,7 @@ def plot_test_case(tc_name, contents, dirname):
     rmcat_keys = sorted(rmcat_log.keys())
     tcp_keys = sorted(tcp_log.keys())
 
-    print('plotting data for tc {}...'.format(tc_name))
+    print('plotting datastdtime for tc {}...'.format(tc_name))
     nflow = len(rmcat_keys) + len(tcp_keys)
 
     l = len(colorlist)

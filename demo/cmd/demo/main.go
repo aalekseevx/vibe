@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bwe/demo/pkg/attr"
 	"fmt"
+	"github.com/aalekseevx/vibe/demo/pkg/attr"
 	"log/slog"
 	"net/http"
 

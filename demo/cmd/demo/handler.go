@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bwe/demo/pkg/attr"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aalekseevx/vibe/demo/pkg/attr"
 	"io"
 	"log/slog"
 	"os"

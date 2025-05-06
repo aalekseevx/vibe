@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bwe/demo/pkg/attr"
 	"encoding/json"
+	"github.com/aalekseevx/vibe/demo/pkg/attr"
 	"log/slog"
 	"os"
 	"sync"

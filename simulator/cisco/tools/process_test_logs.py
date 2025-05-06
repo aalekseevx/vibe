@@ -144,7 +144,7 @@ all_logs = {}
 for filename in os.listdir(dirname):
     process_log(dirname, filename, all_logs)
 
-print("Creating json file with all data: all_tests.json")
+print("Creating json file with all datastdtime: all_tests.json")
 f_json_name = os.path.join(dirname, 'all_tests.json')
 f_json = open(f_json_name, 'w')
 json.dump(all_logs, f_json, indent=4, sort_keys=True)
