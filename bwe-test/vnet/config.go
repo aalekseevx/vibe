@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aalekseevx/vibe/bwe-test/sender"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,15 +17,28 @@ import (
 type Config struct {
 	LogLevel    string     `yaml:"log_level"`
 	UseSyncTest bool       `yaml:"use_sync_test"`
+	TracesDir   string     `yaml:"traces_dir"`
 	TestCases   []TestCase `yaml:"test_cases"`
 }
 
 // TestCase defines a single test case configuration.
 type TestCase struct {
 	Name               string             `yaml:"name"`
-	SenderMode         string             `yaml:"sender_mode"`
 	FlowMode           string             `yaml:"flow_mode"`
 	PathCharacteristic PathCharacteristic `yaml:"path_characteristic"`
+	Sender             SenderConfig       `yaml:"sender"`
+}
+
+// SenderConfig defines the configuration for the sender.
+type SenderConfig struct {
+	Mode            string           `yaml:"mode"`
+	SimulcastConfig *SimulcastConfig `yaml:"simulcast_config,omitempty"`
+}
+
+// SimulcastConfig defines the configuration for simulcast mode.
+type SimulcastConfig struct {
+	InitialQuality string                `yaml:"initial_quality"`
+	Qualities      []sender.QualityConfig `yaml:"qualities"`
 }
 
 // PathCharacteristic defines the network characteristics for the test.

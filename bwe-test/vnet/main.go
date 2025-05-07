@@ -57,7 +57,7 @@ func simulation(config Config) {
 
 	logger := loggerFactory.NewLogger("bwe_test_runner")
 	for _, testCase := range config.TestCases {
-		senderMode, err := ParseSenderMode(testCase.SenderMode)
+		senderMode, err := ParseSenderMode(testCase.Sender.Mode)
 		if err != nil {
 			logger.Errorf("parse sender mode: %v", err)
 			continue
@@ -76,6 +76,8 @@ func simulation(config Config) {
 			senderMode:         senderMode,
 			flowMode:           flowMode,
 			pathCharacteristic: testCase.PathCharacteristic,
+			config:             config,
+			testCase:           testCase,
 		}
 		err = runner.Run()
 		if err != nil {
@@ -118,6 +120,8 @@ type Runner struct {
 	senderMode         senderMode
 	flowMode           flowMode
 	pathCharacteristic PathCharacteristic
+	config             Config
+	testCase           TestCase
 }
 
 var errUnknownFlowMode = errors.New("unknown flow mode")
@@ -154,7 +158,7 @@ func (r *Runner) runVariableAvailableCapacitySingleFlow() error {
 		return fmt.Errorf("mkdir data: %w", err)
 	}
 
-	flow, err := NewSimpleFlow(r.loggerFactory, nm, 0, r.senderMode, dataDir)
+	flow, err := NewSimpleFlow(r.loggerFactory, nm, 0, r.senderMode, dataDir, r.config, r.testCase)
 	if err != nil {
 		return fmt.Errorf("setup simple flow: %w", err)
 	}
@@ -192,7 +196,7 @@ func (r *Runner) runVariableAvailableCapacityMultipleFlows() error {
 	}
 
 	for i := 0; i < 2; i++ {
-		flow, err := NewSimpleFlow(r.loggerFactory, nm, i, r.senderMode, dataDir)
+		flow, err := NewSimpleFlow(r.loggerFactory, nm, i, r.senderMode, dataDir, r.config, r.testCase)
 		defer func(flow Flow) {
 			err = flow.Close()
 			if err != nil {

@@ -29,8 +29,10 @@ func NewSimpleFlow(
 	id int,
 	senderMode senderMode,
 	dataDir string,
+	config Config,
+	testCase TestCase,
 ) (Flow, error) {
-	snd, err := newSender(loggerFactory, nm, id, senderMode, dataDir)
+	snd, err := newSender(loggerFactory, nm, id, senderMode, dataDir, config, testCase)
 	if err != nil {
 		return Flow{}, fmt.Errorf("new sender: %w", err)
 	}
@@ -86,7 +88,10 @@ func (f Flow) Close() error {
 	return errors.Join(errs...)
 }
 
-var errUnknownSenderMode = errors.New("unknown sender mode")
+var (
+	errUnknownSenderMode = errors.New("unknown sender mode")
+	errMissingSimulcastConfig = errors.New("missing simulcast config for simulcast mode")
+)
 
 type sndr struct {
 	sender           *sender.Sender
@@ -122,6 +127,8 @@ func newSender(
 	id int,
 	senderMode senderMode,
 	dataDir string,
+	config Config,
+	testCase TestCase,
 ) (sndr, error) {
 	leftVnet, publicIPLeft, err := nm.GetLeftNet()
 	if err != nil {
@@ -156,6 +163,33 @@ func newSender(
 		)
 		if err != nil {
 			return sndr{}, fmt.Errorf("new abr sender: %w", err)
+		}
+	case simulcastSenderMode:
+		// Check if simulcast config is available
+		if testCase.Sender.SimulcastConfig == nil {
+			return sndr{}, errMissingSimulcastConfig
+		}
+		
+		// Create the trace codec source
+		traceSource, err := sender.NewTraceCodecSource(
+			sender.WithTracesDir(config.TracesDir),
+			sender.WithInitialQuality(testCase.Sender.SimulcastConfig.InitialQuality),
+			sender.WithQualities(testCase.Sender.SimulcastConfig.Qualities),
+		)
+		if err != nil {
+			return sndr{}, fmt.Errorf("new trace codec source: %w", err)
+		}
+		
+		snd, err = sender.NewSender(
+			traceSource,
+			sender.SetVnet(leftVnet, []string{publicIPLeft}),
+			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
+			sender.GCC(100_000, 10_000, 50_000_000),
+			sender.CCLogWriter(ccLogger),
+			sender.SetLoggerFactory(loggerFactory),
+		)
+		if err != nil {
+			return sndr{}, fmt.Errorf("new simulcast sender: %w", err)
 		}
 	default:
 		return sndr{}, fmt.Errorf("%w: %v", errUnknownSenderMode, senderMode)

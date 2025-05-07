@@ -1,9 +1,9 @@
 log_level: info
 use_sync_test: false
+traces_dir: "bwe-test/traces/chat_firefox_h264"
 
 test_cases:
   - name: TestVnetRunnerABR/VariableAvailableCapacitySingleFlow
-    sender_mode: abr
     flow_mode: single
     path_characteristic:
       phases:
@@ -19,4 +19,39 @@ test_cases:
         - duration: 20s
           capacity: 1000000  # 1 Mbit/s
           max_burst: 160000  # 160 Kbit
+    sender:
+      mode: abr
 
+  - name: TestVnetRunnerSimulcast/VariableAvailableCapacitySingleFlow
+    flow_mode: single
+    path_characteristic:
+      phases:
+        - duration: 40s
+          capacity: 1000000  # 1 Mbit/s
+          max_burst: 160000  # 160 Kbit
+        - duration: 20s
+          capacity: 2500000  # 2.5 Mbit/s
+          max_burst: 160000  # 160 Kbit
+        - duration: 20s
+          capacity: 600000   # 0.6 Mbit/s
+          max_burst: 160000  # 160 Kbit
+        - duration: 20s
+          capacity: 1000000  # 1 Mbit/s
+          max_burst: 160000  # 160 Kbit
+    sender:
+      mode: simulcast
+      simulcast_config:
+        initial_quality: "chat_360p"
+        qualities:
+          - name: "chat_90p"
+            bitrate: 100000
+            trace_file: "chat_90p_100.txt"
+          - name: "chat_180p"
+            bitrate: 400000
+            trace_file: "chat_180p_400.txt"
+          - name: "chat_360p"
+            bitrate: 1000000
+            trace_file: "chat_360p_1000.txt"
+          - name: "chat_720p"
+            bitrate: 2000000
+            trace_file: "chat_720p_2000.txt"
