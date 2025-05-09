@@ -15,6 +15,7 @@ pandas = "^2.2.3"
 cffi = "^1.17.0rc1"
 matplotlib = "^3.10.1"
 seaborn = "^0.13.2"
+pyzmq = "^26.4.0"
 
 
 [build-system]
