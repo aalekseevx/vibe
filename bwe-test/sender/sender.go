@@ -13,20 +13,19 @@ import (
 	"net/http"
 	"time"
 
+	cc "github.com/aalekseevx/vibe/bwe-test/interceptorcc"
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
 	"github.com/pion/webrtc/v4/pkg/media"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/aalekseevx/vibe/bwe-test/interceptorcc"
 )
 
 const initialBitrate = 300_000
 
 // MediaSource represents a source of media samples that can be sent over WebRTC.
 type MediaSource interface {
-	SetWriter(func(sample media.Sample) error)
+	SetWriter(func(sample media.Sample, csrc uint32) error)
 	Start(ctx context.Context) error
 }
 
@@ -48,7 +47,7 @@ type Sender struct {
 	mediaEngine   *webrtc.MediaEngine
 
 	peerConnection *webrtc.PeerConnection
-	videoTracks    []*webrtc.TrackLocalStaticSample
+	videoTracks    []*TrackLocalStaticSample
 
 	sources          []MediaSource
 	bitrateAllocator bitrateAllocator
@@ -104,9 +103,9 @@ func (s *Sender) SetupPeerConnection() error {
 
 	// Create a video track
 	for range s.sources {
-		videoTrack, err := webrtc.NewTrackLocalStaticSample(
+		videoTrack, err := NewTrackLocalStaticSample(
 			webrtc.RTPCodecCapability{
-				MimeType: webrtc.MimeTypeVP8,
+				MimeType: webrtc.MimeTypeH264,
 			},
 			"video",
 			"pion",

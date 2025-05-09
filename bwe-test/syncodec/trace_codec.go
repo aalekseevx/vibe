@@ -11,13 +11,18 @@ import (
 	"github.com/aalekseevx/vibe/bwe-test/traces"
 )
 
+type Trace struct {
+	*traces.Trace
+	CSRC uint32
+}
+
 // TraceCodec implements a codec that uses pre-recorded traces for different qualities.
 // It provides an API to switch between different quality traces.
 type TraceCodec struct {
 	writer FrameWriter
 
 	// Map of quality identifiers to trace data
-	traces map[string]*traces.Trace
+	traces map[string]Trace
 
 	// Current active quality
 	currentQuality string
@@ -32,7 +37,7 @@ type TraceCodec struct {
 }
 
 // NewTraceCodec creates a new TraceCodec with the specified frame writer and traces.
-func NewTraceCodec(writer FrameWriter, traces map[string]*traces.Trace, initialQuality string) (*TraceCodec, error) {
+func NewTraceCodec(writer FrameWriter, traces map[string]Trace, initialQuality string) (*TraceCodec, error) {
 	if len(traces) == 0 {
 		return nil, errors.New("no traces provided")
 	}
@@ -104,6 +109,7 @@ func (c *TraceCodec) Start() {
 			c.writer.WriteFrame(Frame{
 				Content:  make([]byte, frame.Size),
 				Duration: frameDuration,
+				CSRC:     trace.CSRC,
 			})
 
 			c.frameIndex = (c.frameIndex + 1) % len(trace.Frames)

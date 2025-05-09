@@ -25,15 +25,19 @@ simulcast_configs_presets:
       - name: "chat_90p"
         bitrate: 100000
         trace_file: "chat_90p_100.txt"
+        csrc: 1
       - name: "chat_180p"
         bitrate: 400000
         trace_file: "chat_180p_400.txt"
+        csrc: 2
       - name: "chat_360p"
         bitrate: 1000000
         trace_file: "chat_360p_1000.txt"
+        csrc: 3
       - name: "chat_720p"
         bitrate: 2000000
         trace_file: "chat_720p_2000.txt"
+        csrc: 4
 
 test_cases:
   - name: TestVnetRunnerABR/VariableAvailableCapacitySingleFlow
@@ -47,11 +51,15 @@ test_cases:
     path_characteristic_preset: variable_capacity
     sender:
       mode: simulcast
-      simulcast_preset: standard_qualities
+      simulcast_presets:
+        - standard_qualities
 
-  - name: TestVnetRunnerSimulcast/TripleSimulcastTracks
+  - name: TestVnetRunnerSimulcast/VariableAvailableCapacity3SimulcastTracks
     flow_mode: single
     path_characteristic_preset: variable_capacity
     sender:
       mode: simulcast
-      simulcast_preset: standard_qualities
+      simulcast_presets:
+        - standard_qualities
+        - standard_qualities
+        - standard_qualities

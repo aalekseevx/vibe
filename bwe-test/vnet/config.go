@@ -15,31 +15,31 @@ import (
 
 // Config represents the YAML configuration for the bandwidth estimation tests.
 type Config struct {
- 	LogLevel                  string                       `yaml:"log_level"`
-	UseSyncTest               bool                         `yaml:"use_sync_test"`
-	TracesDir                 string                       `yaml:"traces_dir"`
-	SimulcastConfigsPresets   map[string]SimulcastConfig   `yaml:"simulcast_configs_presets"`
+	LogLevel                  string                        `yaml:"log_level"`
+	UseSyncTest               bool                          `yaml:"use_sync_test"`
+	TracesDir                 string                        `yaml:"traces_dir"`
+	SimulcastConfigsPresets   map[string]SimulcastConfig    `yaml:"simulcast_configs_presets"`
 	PathCharacteristicPresets map[string]PathCharacteristic `yaml:"path_characteristic_presets"`
-	TestCases                 []TestCase                   `yaml:"test_cases"`
+	TestCases                 []TestCase                    `yaml:"test_cases"`
 }
 
 // TestCase defines a single test case configuration.
 type TestCase struct {
-	Name                   string       `yaml:"name"`
-	FlowMode               string       `yaml:"flow_mode"`
-	PathCharacteristicPreset string     `yaml:"path_characteristic_preset"`
-	Sender                 SenderConfig `yaml:"sender"`
+	Name                     string       `yaml:"name"`
+	FlowMode                 string       `yaml:"flow_mode"`
+	PathCharacteristicPreset string       `yaml:"path_characteristic_preset"`
+	Sender                   SenderConfig `yaml:"sender"`
 }
 
 // SenderConfig defines the configuration for the sender.
 type SenderConfig struct {
-	Mode            string `yaml:"mode"`
-	SimulcastPreset string `yaml:"simulcast_preset,omitempty"`
+	Mode             string   `yaml:"mode"`
+	SimulcastPresets []string `yaml:"simulcast_presets,omitempty"`
 }
 
 // SimulcastConfig defines the configuration for simulcast mode.
 type SimulcastConfig struct {
-	InitialQuality string                `yaml:"initial_quality"`
+	InitialQuality string                 `yaml:"initial_quality"`
 	Qualities      []sender.QualityConfig `yaml:"qualities"`
 }
 
@@ -89,22 +89,20 @@ func GetPathCharacteristic(config Config, testCase TestCase) (PathCharacteristic
 
 // GetSimulcastConfigs returns the simulcast configs for a test case.
 func GetSimulcastConfigs(config Config, testCase TestCase) ([]SimulcastConfig, error) {
-	if testCase.Sender.Mode != "simulcast" || testCase.Sender.SimulcastPreset == "" {
+	if testCase.Sender.Mode != "simulcast" {
 		return nil, nil
 	}
 
-	preset, ok := config.SimulcastConfigsPresets[testCase.Sender.SimulcastPreset]
-	if !ok {
-		return nil, fmt.Errorf("simulcast preset not found: %s", testCase.Sender.SimulcastPreset)
+	presets := make([]SimulcastConfig, len(testCase.Sender.SimulcastPresets))
+	for i, presetName := range testCase.Sender.SimulcastPresets {
+		preset, ok := config.SimulcastConfigsPresets[presetName]
+		if !ok {
+			return nil, fmt.Errorf("simulcast preset not found: %s", presetName)
+		}
+		presets[i] = preset
 	}
 
-	// For the TripleSimulcastTracks test case, we need 3 identical tracks
-	if testCase.Name == "TestVnetRunnerSimulcast/TripleSimulcastTracks" {
-		return []SimulcastConfig{preset, preset, preset}, nil
-	}
-
-	// For regular simulcast test cases, we need 1 track
-	return []SimulcastConfig{preset}, nil
+	return presets, nil
 }
 
 // ParseSenderMode converts a string sender mode to the corresponding enum value.

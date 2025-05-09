@@ -21,7 +21,7 @@ type RTPFormatter struct {
 }
 
 // RTPFormat formats an RTP packet as a string for logging.
-func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, _ interceptor.Attributes) string {
+func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, attr interceptor.Attributes) string {
 	var twcc rtp.TransportCCExtension
 	unwrappedSeqNr := f.seqnr.Unwrap(pkt.SequenceNumber)
 	var twccNr uint16
@@ -33,7 +33,7 @@ func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, _ interceptor.Attributes) stri
 		twccNr = twcc.TransportSequence
 	}
 
-	return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v, %v\n",
+	return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n",
 		time.Now().UnixMilli(),
 		pkt.PayloadType,
 		pkt.SSRC,
@@ -43,6 +43,7 @@ func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, _ interceptor.Attributes) stri
 		pkt.MarshalSize(),
 		twccNr,
 		unwrappedSeqNr,
+		pkt.CSRC[0],
 	)
 }
 

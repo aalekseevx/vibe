@@ -64,7 +64,8 @@ func (a *simulcastBitrateAllocator) SetTargetBitrate(targetBitrate int) error {
 		maximumBitrateSourceQuality := -1
 		for i, source := range a.sources {
 			sourceQualities := source.GetQualities()
-			for j, quality := range sourceQualities[1:] {
+			for j := 1; j < len(sourceQualities); j++ {
+				quality := sourceQualities[j]
 				if quality.Active && quality.Bitrate > maximumBitrate {
 					maximumBitrate = quality.Bitrate
 					maximumBitrateSource = i

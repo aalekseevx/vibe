@@ -170,11 +170,11 @@ func newSender(
 		if err != nil {
 			return sndr{}, err
 		}
-		
+
 		if len(simulcastConfigs) == 0 {
 			return sndr{}, errMissingSimulcastConfig
 		}
-		
+
 		// Create trace codec sources for each config
 		var traceSources []sender.SimulcastSource
 		for _, simulcastConfig := range simulcastConfigs {
