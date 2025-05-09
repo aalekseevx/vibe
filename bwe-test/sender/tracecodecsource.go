@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/pion/logging"
@@ -19,15 +20,13 @@ import (
 
 // TraceCodecSource is a source that uses trace files for different qualities.
 type TraceCodecSource struct {
-	codec          *syncodec.TraceCodec
-	sampleWriter   func(media.Sample) error
-	newFrame       chan syncodec.Frame
-	done           chan struct{}
-	wg             sync.WaitGroup
-	log            logging.LeveledLogger
-	initialQuality string
-	tracesDir      string
-	qualities      []QualityConfig
+	codec        *syncodec.TraceCodec
+	sampleWriter func(media.Sample) error
+	newFrame     chan syncodec.Frame
+	done         chan struct{}
+	wg           sync.WaitGroup
+	log          logging.LeveledLogger
+	qualities    []QualityConfig
 }
 
 // QualityConfig defines the configuration for a single quality level.
@@ -40,71 +39,32 @@ type QualityConfig struct {
 // TraceCodecSourceOption is a function that configures a TraceCodecSource.
 type TraceCodecSourceOption func(*TraceCodecSource) error
 
-// WithInitialQuality sets the initial quality for the codec.
-func WithInitialQuality(quality string) TraceCodecSourceOption {
-	return func(s *TraceCodecSource) error {
-		s.initialQuality = quality
-		return nil
-	}
-}
-
-// WithTracesDir sets the directory containing trace files.
-func WithTracesDir(tracesDir string) TraceCodecSourceOption {
-	return func(s *TraceCodecSource) error {
-		s.tracesDir = tracesDir
-		return nil
-	}
-}
-
-// WithQualities sets the quality configurations.
-func WithQualities(qualities []QualityConfig) TraceCodecSourceOption {
-	return func(s *TraceCodecSource) error {
-		s.qualities = qualities
-		return nil
-	}
-}
-
 // NewTraceCodecSource creates a new TraceCodecSource with the specified options.
-func NewTraceCodecSource(opts ...TraceCodecSourceOption) (*TraceCodecSource, error) {
+func NewTraceCodecSource(tracesDir string, qualities []QualityConfig, initialQuality string) (*TraceCodecSource, error) {
 	source := &TraceCodecSource{
 		sampleWriter: func(_ media.Sample) error {
 			return errors.New("write on uninitialized TraceCodecSource.WriteSample")
 		},
-		newFrame: make(chan syncodec.Frame),
-		done:     make(chan struct{}),
-		wg:       sync.WaitGroup{},
-		log:      logging.NewDefaultLoggerFactory().NewLogger("trace_codec_source"),
-		tracesDir: "bwe-test/traces/chat_firefox_h264", // Default traces directory
-	}
-
-	// Apply options
-	for _, opt := range opts {
-		if err := opt(source); err != nil {
-			return nil, err
-		}
+		newFrame:  make(chan syncodec.Frame),
+		done:      make(chan struct{}),
+		wg:        sync.WaitGroup{},
+		log:       logging.NewDefaultLoggerFactory().NewLogger("trace_codec_source"),
+		qualities: qualities,
 	}
 
 	// Ensure we have qualities defined
-	if len(source.qualities) == 0 {
+	if len(qualities) == 0 {
 		return nil, errors.New("no qualities defined for trace codec source")
 	}
 
 	// Load trace files
-	traceFiles, err := loadTraceFiles(source.tracesDir, source.qualities)
+	traceFiles, err := loadTraceFiles(tracesDir, qualities)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create codec options from source options
-	var codecOpts []syncodec.TraceCodecOption
-	
-	// Add initial quality option if set
-	if source.initialQuality != "" {
-		codecOpts = append(codecOpts, syncodec.WithInitialQuality(source.initialQuality))
-	}
-
 	// Create the codec
-	codec, err := syncodec.NewTraceCodec(source, traceFiles, codecOpts...)
+	codec, err := syncodec.NewTraceCodec(source, traceFiles, initialQuality)
 	if err != nil {
 		return nil, err
 	}
@@ -116,24 +76,24 @@ func NewTraceCodecSource(opts ...TraceCodecSourceOption) (*TraceCodecSource, err
 // loadTraceFiles loads the specified trace files from the directory.
 func loadTraceFiles(tracesDir string, qualities []QualityConfig) (map[string]*traces.Trace, error) {
 	traceFiles := make(map[string]*traces.Trace)
-	
+
 	// Process each specified quality
 	for _, quality := range qualities {
 		path := filepath.Join(tracesDir, quality.TraceFile)
-		
+
 		// Load the trace file
 		trace, err := traces.ReadTraceFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load trace file %s: %w", path, err)
 		}
-		
+
 		traceFiles[quality.Name] = trace
 	}
-	
+
 	if len(traceFiles) == 0 {
 		return nil, fmt.Errorf("no trace files loaded")
 	}
-	
+
 	return traceFiles, nil
 }
 
@@ -142,14 +102,27 @@ func (s *TraceCodecSource) SetQuality(quality string) error {
 	return s.codec.SetQuality(quality)
 }
 
-// GetCurrentQuality returns the current quality.
-func (s *TraceCodecSource) GetCurrentQuality() string {
-	return s.codec.GetCurrentQuality()
+type Quality struct {
+	Name    string
+	Bitrate int
+	Active  bool
 }
 
-// GetAvailableQualities returns a list of available qualities.
-func (s *TraceCodecSource) GetAvailableQualities() []string {
-	return s.codec.GetAvailableQualities()
+// GetQualities returns the available qualities for the codec.
+func (s *TraceCodecSource) GetQualities() []Quality {
+	qualities := make([]Quality, len(s.qualities))
+	for i, q := range s.qualities {
+		qualities[i] = Quality{
+			Name:    q.Name,
+			Bitrate: q.Bitrate,
+			Active:  q.Name == s.codec.GetCurrentQuality(),
+		}
+	}
+	// Sort the qualities by bitrate
+	sort.Slice(qualities, func(i, j int) bool {
+		return qualities[i].Bitrate < qualities[j].Bitrate
+	})
+	return qualities
 }
 
 // SetWriter sets the sample writer function.
@@ -161,7 +134,7 @@ func (s *TraceCodecSource) SetWriter(f func(sample media.Sample) error) {
 func (s *TraceCodecSource) Start(ctx context.Context) error {
 	s.wg.Add(1)
 	defer s.wg.Done()
-	
+
 	// Start the codec in a goroutine
 	go s.codec.Start()
 	defer func() {
@@ -169,7 +142,7 @@ func (s *TraceCodecSource) Start(ctx context.Context) error {
 			s.log.Errorf("Failed to close codec: %v", err)
 		}
 	}()
-	
+
 	for {
 		select {
 		case frame := <-s.newFrame:
@@ -185,6 +158,10 @@ func (s *TraceCodecSource) Start(ctx context.Context) error {
 	}
 }
 
+func (s *TraceCodecSource) SetTargetBitrate(i int) {
+	// Does nothing for now
+}
+
 // WriteFrame writes a frame to the encoder.
 func (s *TraceCodecSource) WriteFrame(frame syncodec.Frame) {
 	s.newFrame <- frame
@@ -194,6 +171,6 @@ func (s *TraceCodecSource) WriteFrame(frame syncodec.Frame) {
 func (s *TraceCodecSource) Close() error {
 	defer s.wg.Wait()
 	close(s.done)
-	
+
 	return nil
 }

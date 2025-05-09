@@ -1,6 +1,6 @@
 log_level: info
-use_sync_test: false
-traces_dir: "bwe-test/traces/chat_firefox_h264"
+use_sync_test: true
+traces_dir: "traces/chat_firefox_h264"
 
 test_cases:
   - name: TestVnetRunnerABR/VariableAvailableCapacitySingleFlow
@@ -41,7 +41,7 @@ test_cases:
     sender:
       mode: simulcast
       simulcast_config:
-        initial_quality: "chat_360p"
+        initial_quality: "chat_720p"
         qualities:
           - name: "chat_90p"
             bitrate: 100000

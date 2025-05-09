@@ -89,7 +89,7 @@ func (f Flow) Close() error {
 }
 
 var (
-	errUnknownSenderMode = errors.New("unknown sender mode")
+	errUnknownSenderMode      = errors.New("unknown sender mode")
 	errMissingSimulcastConfig = errors.New("missing simulcast config for simulcast mode")
 )
 
@@ -154,7 +154,7 @@ func newSender(
 	switch senderMode {
 	case abrSenderMode:
 		snd, err = sender.NewSender(
-			sender.NewStatisticalEncoderSource(),
+			sender.SetEncoderSource(sender.NewStatisticalEncoderSource()),
 			sender.SetVnet(leftVnet, []string{publicIPLeft}),
 			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
 			sender.GCC(100_000, 10_000, 50_000_000),
@@ -169,19 +169,19 @@ func newSender(
 		if testCase.Sender.SimulcastConfig == nil {
 			return sndr{}, errMissingSimulcastConfig
 		}
-		
+
 		// Create the trace codec source
 		traceSource, err := sender.NewTraceCodecSource(
-			sender.WithTracesDir(config.TracesDir),
-			sender.WithInitialQuality(testCase.Sender.SimulcastConfig.InitialQuality),
-			sender.WithQualities(testCase.Sender.SimulcastConfig.Qualities),
+			config.TracesDir,
+			testCase.Sender.SimulcastConfig.Qualities,
+			testCase.Sender.SimulcastConfig.InitialQuality,
 		)
 		if err != nil {
 			return sndr{}, fmt.Errorf("new trace codec source: %w", err)
 		}
-		
+
 		snd, err = sender.NewSender(
-			traceSource,
+			sender.SetSimulcastSources(traceSource),
 			sender.SetVnet(leftVnet, []string{publicIPLeft}),
 			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
 			sender.GCC(100_000, 10_000, 50_000_000),

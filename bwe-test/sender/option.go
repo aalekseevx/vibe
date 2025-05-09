@@ -98,11 +98,27 @@ func SetVnet(v *vnet.Net, publicIPs []string) Option {
 	}
 }
 
-// SetMediaSource returns an Option that sets the media source for the sender.
-func SetMediaSource(source MediaSource) Option {
+// SetEncoderSource returns an Option that configures the encoder source.
+func SetEncoderSource(source EncoderSource) Option {
 	return func(s *Sender) error {
-		s.source = source
+		s.sources = []MediaSource{source}
+		s.bitrateAllocator = &encoderBitrateAllocator{
+			source: source,
+		}
+		return nil
+	}
+}
 
+// SetSimulcastSources returns an Option that configures the simulcast sources.
+func SetSimulcastSources(sources []SimulcastSource) Option {
+	return func(s *Sender) error {
+		s.sources = make([]MediaSource, len(sources))
+		for i, source := range sources {
+			s.sources[i] = source
+		}
+		s.bitrateAllocator = &simulcastBitrateAllocator{
+			sources: sources,
+		}
 		return nil
 	}
 }

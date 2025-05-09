@@ -26,9 +26,20 @@ const initialBitrate = 300_000
 
 // MediaSource represents a source of media samples that can be sent over WebRTC.
 type MediaSource interface {
-	SetTargetBitrate(int)
 	SetWriter(func(sample media.Sample) error)
 	Start(ctx context.Context) error
+}
+
+type EncoderSource interface {
+	MediaSource
+	SetTargetBitrate(int)
+}
+
+type SimulcastSource interface {
+	MediaSource
+	SetQuality(quality string) error
+	// GetQualities return sorted qualities by bitrate
+	GetQualities() []Quality
 }
 
 // Sender manages a WebRTC connection for sending media.
@@ -37,9 +48,11 @@ type Sender struct {
 	mediaEngine   *webrtc.MediaEngine
 
 	peerConnection *webrtc.PeerConnection
-	videoTrack     *webrtc.TrackLocalStaticSample
+	videoTracks    []*webrtc.TrackLocalStaticSample
 
-	source        MediaSource
+	sources          []MediaSource
+	bitrateAllocator bitrateAllocator
+
 	estimator     cc.BandwidthEstimator
 	estimatorChan chan *cc.Interceptor
 
@@ -51,13 +64,13 @@ type Sender struct {
 }
 
 // NewSender creates a new WebRTC sender with the given media source and options.
-func NewSender(source MediaSource, opts ...Option) (*Sender, error) {
+func NewSender(opts ...Option) (*Sender, error) {
 	sender := &Sender{
 		settingEngine:  &webrtc.SettingEngine{},
 		mediaEngine:    &webrtc.MediaEngine{},
 		peerConnection: nil,
-		videoTrack:     nil,
-		source:         source,
+		videoTracks:    nil,
+		sources:        nil,
 		estimator:      nil,
 		estimatorChan:  make(chan *cc.Interceptor),
 		registry:       &interceptor.Registry{},
@@ -90,34 +103,37 @@ func (s *Sender) SetupPeerConnection() error {
 	s.peerConnection = peerConnection
 
 	// Create a video track
-	videoTrack, err := webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{
-			MimeType: webrtc.MimeTypeVP8,
-		},
-		"video",
-		"pion",
-	)
-	if err != nil {
-		return err
-	}
-	s.videoTrack = videoTrack
-
-	rtpSender, err := s.peerConnection.AddTrack(s.videoTrack)
-	if err != nil {
-		return err
-	}
-
-	// Read incoming RTCP packets
-	// Before these packets are returned they are processed by interceptors. For things
-	// like NACK this needs to be called.
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
-				return
-			}
+	for range s.sources {
+		videoTrack, err := webrtc.NewTrackLocalStaticSample(
+			webrtc.RTPCodecCapability{
+				MimeType: webrtc.MimeTypeVP8,
+			},
+			"video",
+			"pion",
+		)
+		if err != nil {
+			return err
 		}
-	}()
+
+		rtpSender, err := s.peerConnection.AddTrack(videoTrack)
+		if err != nil {
+			return err
+		}
+
+		// Read incoming RTCP packets
+		// Before these packets are returned they are processed by interceptors. For things
+		// like NACK this needs to be called.
+		go func() {
+			rtcpBuf := make([]byte, 1500)
+			for {
+				if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
+					return
+				}
+			}
+		}()
+
+		s.videoTracks = append(s.videoTracks, videoTrack)
+	}
 
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
@@ -175,7 +191,9 @@ func (s *Sender) Start(ctx context.Context) error {
 	lastLog := time.Now()
 	lastBitrate := initialBitrate
 
-	s.source.SetWriter(s.videoTrack.WriteSample)
+	for i, track := range s.videoTracks {
+		s.sources[i].SetWriter(track.WriteSample)
+	}
 
 	wg, ctx := errgroup.WithContext(ctx)
 
@@ -195,7 +213,10 @@ func (s *Sender) Start(ctx context.Context) error {
 					lastLog = now
 				}
 				if lastBitrate != targetBitrate {
-					s.source.SetTargetBitrate(targetBitrate)
+					err := s.bitrateAllocator.SetTargetBitrate(targetBitrate)
+					if err != nil {
+						return fmt.Errorf("set target bitrate: %w", err)
+					}
 					lastBitrate = targetBitrate
 				}
 				if _, err := fmt.Fprintf(s.ccLogWriter, "%v, %v\n", now.UnixMilli(), targetBitrate); err != nil {
@@ -207,9 +228,11 @@ func (s *Sender) Start(ctx context.Context) error {
 		}
 	})
 
-	wg.Go(func() error {
-		return s.source.Start(ctx)
-	})
+	for _, source := range s.sources {
+		wg.Go(func() error {
+			return source.Start(ctx)
+		})
+	}
 
 	defer func() {
 		if err := s.peerConnection.Close(); err != nil {
