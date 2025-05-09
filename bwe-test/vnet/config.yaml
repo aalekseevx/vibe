@@ -2,56 +2,56 @@ log_level: info
 use_sync_test: true
 traces_dir: "traces/chat_firefox_h264"
 
+path_characteristic_presets:
+  variable_capacity:
+    phases:
+      - duration: 40s
+        capacity: 1000000  # 1 Mbit/s
+        max_burst: 160000  # 160 Kbit
+      - duration: 20s
+        capacity: 2500000  # 2.5 Mbit/s
+        max_burst: 160000  # 160 Kbit
+      - duration: 20s
+        capacity: 600000   # 0.6 Mbit/s
+        max_burst: 160000  # 160 Kbit
+      - duration: 20s
+        capacity: 1000000  # 1 Mbit/s
+        max_burst: 160000  # 160 Kbit
+
+simulcast_configs_presets:
+  standard_qualities:
+    initial_quality: "chat_720p"
+    qualities:
+      - name: "chat_90p"
+        bitrate: 100000
+        trace_file: "chat_90p_100.txt"
+      - name: "chat_180p"
+        bitrate: 400000
+        trace_file: "chat_180p_400.txt"
+      - name: "chat_360p"
+        bitrate: 1000000
+        trace_file: "chat_360p_1000.txt"
+      - name: "chat_720p"
+        bitrate: 2000000
+        trace_file: "chat_720p_2000.txt"
+
 test_cases:
   - name: TestVnetRunnerABR/VariableAvailableCapacitySingleFlow
     flow_mode: single
-    path_characteristic:
-      phases:
-        - duration: 40s
-          capacity: 1000000  # 1 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 2500000  # 2.5 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 600000   # 0.6 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 1000000  # 1 Mbit/s
-          max_burst: 160000  # 160 Kbit
+    path_characteristic_preset: variable_capacity
     sender:
       mode: abr
 
   - name: TestVnetRunnerSimulcast/VariableAvailableCapacitySingleFlow
     flow_mode: single
-    path_characteristic:
-      phases:
-        - duration: 40s
-          capacity: 1000000  # 1 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 2500000  # 2.5 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 600000   # 0.6 Mbit/s
-          max_burst: 160000  # 160 Kbit
-        - duration: 20s
-          capacity: 1000000  # 1 Mbit/s
-          max_burst: 160000  # 160 Kbit
+    path_characteristic_preset: variable_capacity
     sender:
       mode: simulcast
-      simulcast_config:
-        initial_quality: "chat_720p"
-        qualities:
-          - name: "chat_90p"
-            bitrate: 100000
-            trace_file: "chat_90p_100.txt"
-          - name: "chat_180p"
-            bitrate: 400000
-            trace_file: "chat_180p_400.txt"
-          - name: "chat_360p"
-            bitrate: 1000000
-            trace_file: "chat_360p_1000.txt"
-          - name: "chat_720p"
-            bitrate: 2000000
-            trace_file: "chat_720p_2000.txt"
+      simulcast_preset: standard_qualities
+
+  - name: TestVnetRunnerSimulcast/TripleSimulcastTracks
+    flow_mode: single
+    path_characteristic_preset: variable_capacity
+    sender:
+      mode: simulcast
+      simulcast_preset: standard_qualities

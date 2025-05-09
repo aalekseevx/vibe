@@ -15,24 +15,26 @@ import (
 
 // Config represents the YAML configuration for the bandwidth estimation tests.
 type Config struct {
-	LogLevel    string     `yaml:"log_level"`
-	UseSyncTest bool       `yaml:"use_sync_test"`
-	TracesDir   string     `yaml:"traces_dir"`
-	TestCases   []TestCase `yaml:"test_cases"`
+ 	LogLevel                  string                       `yaml:"log_level"`
+	UseSyncTest               bool                         `yaml:"use_sync_test"`
+	TracesDir                 string                       `yaml:"traces_dir"`
+	SimulcastConfigsPresets   map[string]SimulcastConfig   `yaml:"simulcast_configs_presets"`
+	PathCharacteristicPresets map[string]PathCharacteristic `yaml:"path_characteristic_presets"`
+	TestCases                 []TestCase                   `yaml:"test_cases"`
 }
 
 // TestCase defines a single test case configuration.
 type TestCase struct {
-	Name               string             `yaml:"name"`
-	FlowMode           string             `yaml:"flow_mode"`
-	PathCharacteristic PathCharacteristic `yaml:"path_characteristic"`
-	Sender             SenderConfig       `yaml:"sender"`
+	Name                   string       `yaml:"name"`
+	FlowMode               string       `yaml:"flow_mode"`
+	PathCharacteristicPreset string     `yaml:"path_characteristic_preset"`
+	Sender                 SenderConfig `yaml:"sender"`
 }
 
 // SenderConfig defines the configuration for the sender.
 type SenderConfig struct {
-	Mode            string           `yaml:"mode"`
-	SimulcastConfig *SimulcastConfig `yaml:"simulcast_config,omitempty"`
+	Mode            string `yaml:"mode"`
+	SimulcastPreset string `yaml:"simulcast_preset,omitempty"`
 }
 
 // SimulcastConfig defines the configuration for simulcast mode.
@@ -74,6 +76,35 @@ func LoadConfig() (Config, error) {
 	}
 
 	return config, nil
+}
+
+// GetPathCharacteristic returns the path characteristic for a test case.
+func GetPathCharacteristic(config Config, testCase TestCase) (PathCharacteristic, error) {
+	preset, ok := config.PathCharacteristicPresets[testCase.PathCharacteristicPreset]
+	if !ok {
+		return PathCharacteristic{}, fmt.Errorf("path characteristic preset not found: %s", testCase.PathCharacteristicPreset)
+	}
+	return preset, nil
+}
+
+// GetSimulcastConfigs returns the simulcast configs for a test case.
+func GetSimulcastConfigs(config Config, testCase TestCase) ([]SimulcastConfig, error) {
+	if testCase.Sender.Mode != "simulcast" || testCase.Sender.SimulcastPreset == "" {
+		return nil, nil
+	}
+
+	preset, ok := config.SimulcastConfigsPresets[testCase.Sender.SimulcastPreset]
+	if !ok {
+		return nil, fmt.Errorf("simulcast preset not found: %s", testCase.Sender.SimulcastPreset)
+	}
+
+	// For the TripleSimulcastTracks test case, we need 3 identical tracks
+	if testCase.Name == "TestVnetRunnerSimulcast/TripleSimulcastTracks" {
+		return []SimulcastConfig{preset, preset, preset}, nil
+	}
+
+	// For regular simulcast test cases, we need 1 track
+	return []SimulcastConfig{preset}, nil
 }
 
 // ParseSenderMode converts a string sender mode to the corresponding enum value.

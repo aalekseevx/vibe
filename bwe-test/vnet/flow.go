@@ -165,23 +165,32 @@ func newSender(
 			return sndr{}, fmt.Errorf("new abr sender: %w", err)
 		}
 	case simulcastSenderMode:
-		// Check if simulcast config is available
-		if testCase.Sender.SimulcastConfig == nil {
+		// Get simulcast configs for this test case
+		simulcastConfigs, err := GetSimulcastConfigs(config, testCase)
+		if err != nil {
+			return sndr{}, err
+		}
+		
+		if len(simulcastConfigs) == 0 {
 			return sndr{}, errMissingSimulcastConfig
 		}
-
-		// Create the trace codec source
-		traceSource, err := sender.NewTraceCodecSource(
-			config.TracesDir,
-			testCase.Sender.SimulcastConfig.Qualities,
-			testCase.Sender.SimulcastConfig.InitialQuality,
-		)
-		if err != nil {
-			return sndr{}, fmt.Errorf("new trace codec source: %w", err)
+		
+		// Create trace codec sources for each config
+		var traceSources []sender.SimulcastSource
+		for _, simulcastConfig := range simulcastConfigs {
+			traceSource, err := sender.NewTraceCodecSource(
+				config.TracesDir,
+				simulcastConfig.Qualities,
+				simulcastConfig.InitialQuality,
+			)
+			if err != nil {
+				return sndr{}, fmt.Errorf("new trace codec source: %w", err)
+			}
+			traceSources = append(traceSources, traceSource)
 		}
 
 		snd, err = sender.NewSender(
-			sender.SetSimulcastSources(traceSource),
+			sender.SetSimulcastSources(traceSources),
 			sender.SetVnet(leftVnet, []string{publicIPLeft}),
 			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
 			sender.GCC(100_000, 10_000, 50_000_000),

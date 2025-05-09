@@ -75,7 +75,6 @@ func simulation(config Config) {
 			name:               testCase.Name,
 			senderMode:         senderMode,
 			flowMode:           flowMode,
-			pathCharacteristic: testCase.PathCharacteristic,
 			config:             config,
 			testCase:           testCase,
 		}
@@ -119,7 +118,6 @@ type Runner struct {
 	name               string
 	senderMode         senderMode
 	flowMode           flowMode
-	pathCharacteristic PathCharacteristic
 	config             Config
 	testCase           TestCase
 }
@@ -128,14 +126,20 @@ var errUnknownFlowMode = errors.New("unknown flow mode")
 
 // Run executes the test based on the configured flow mode.
 func (r *Runner) Run() error {
+	// Get the path characteristic to use
+	pathCharacteristic, err := GetPathCharacteristic(r.config, r.testCase)
+	if err != nil {
+		return err
+	}
+
 	switch r.flowMode {
 	case singleFlowMode:
-		err := r.runVariableAvailableCapacitySingleFlow()
+		err := r.runVariableAvailableCapacitySingleFlow(pathCharacteristic)
 		if err != nil {
 			return fmt.Errorf("run variable available capacity single flow: %w", err)
 		}
 	case multipleFlowsMode:
-		err := r.runVariableAvailableCapacityMultipleFlows()
+		err := r.runVariableAvailableCapacityMultipleFlows(pathCharacteristic)
 		if err != nil {
 			return fmt.Errorf("run variable available capacity multiple flows: %w", err)
 		}
@@ -146,7 +150,7 @@ func (r *Runner) Run() error {
 	return nil
 }
 
-func (r *Runner) runVariableAvailableCapacitySingleFlow() error {
+func (r *Runner) runVariableAvailableCapacitySingleFlow(pathCharacteristic PathCharacteristic) error {
 	nm, err := NewManager()
 	if err != nil {
 		return fmt.Errorf("new manager: %w", err)
@@ -178,12 +182,12 @@ func (r *Runner) runVariableAvailableCapacitySingleFlow() error {
 		}
 	}()
 
-	r.runNetworkSimulation(r.pathCharacteristic.Phases, nm)
+	r.runNetworkSimulation(pathCharacteristic.Phases, nm)
 
 	return nil
 }
 
-func (r *Runner) runVariableAvailableCapacityMultipleFlows() error {
+func (r *Runner) runVariableAvailableCapacityMultipleFlows(pathCharacteristic PathCharacteristic) error {
 	nm, err := NewManager()
 	if err != nil {
 		return fmt.Errorf("new manager: %w", err)
@@ -214,7 +218,7 @@ func (r *Runner) runVariableAvailableCapacityMultipleFlows() error {
 		}()
 	}
 
-	r.runNetworkSimulation(r.pathCharacteristic.Phases, nm)
+	r.runNetworkSimulation(pathCharacteristic.Phases, nm)
 
 	return nil
 }
