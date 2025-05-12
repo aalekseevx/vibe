@@ -21,19 +21,22 @@ type RTPFormatter struct {
 }
 
 // RTPFormat formats an RTP packet as a string for logging.
-func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, attr interceptor.Attributes) string {
+func (f *RTPFormatter) RTPFormat(info *interceptor.StreamInfo, pkt *rtp.Packet, attr interceptor.Attributes) ([]byte, error) {
 	var twcc rtp.TransportCCExtension
 	unwrappedSeqNr := f.seqnr.Unwrap(pkt.SequenceNumber)
 	var twccNr uint16
 	if len(pkt.GetExtensionIDs()) > 0 {
 		ext := pkt.GetExtension(pkt.GetExtensionIDs()[0])
 		if err := twcc.Unmarshal(ext); err != nil {
-			return fmt.Sprintf("Error unmarshaling TWCC extension: %v", err)
+			return nil, fmt.Errorf("Error unmarshaling TWCC extension: %w", err)
 		}
 		twccNr = twcc.TransportSequence
 	}
 
-	return fmt.Sprintf("%v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n",
+	isRTX := info.SSRCRetransmission == pkt.SSRC
+	isFEC := info.SSRCForwardErrorCorrection == pkt.SSRC
+
+	return []byte(fmt.Sprintf("%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v\n",
 		time.Now().UnixMilli(),
 		pkt.PayloadType,
 		pkt.SSRC,
@@ -44,7 +47,9 @@ func (f *RTPFormatter) RTPFormat(pkt *rtp.Packet, attr interceptor.Attributes) s
 		twccNr,
 		unwrappedSeqNr,
 		pkt.CSRC[0],
-	)
+		isRTX,
+		isFEC,
+	)), nil
 }
 
 // RTCPFormat formats RTCP packets as a string for logging.
@@ -60,5 +65,5 @@ func RTCPFormat(pkts []rtcp.Packet, _ interceptor.Attributes) string {
 		}
 	}
 
-	return fmt.Sprintf("%v, %v\n", now, size)
+	return fmt.Sprintf("%v,%v\n", now, size)
 }

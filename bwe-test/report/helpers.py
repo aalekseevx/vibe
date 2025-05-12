@@ -94,6 +94,45 @@ def get_quality_name_from_csrc(config, test_cases, experiment, csrc):
     
     return f"Unknown (CSRC: {csrc})"
 
+def get_quality_bitrates(config, test_cases, experiment):
+    """Get all qualities and their bitrates for an experiment.
+    
+    Args:
+        config: The full configuration.
+        test_cases: Dictionary of test cases.
+        experiment: The experiment name.
+        
+    Returns:
+        A list of dictionaries with 'name' and 'bitrate' keys, sorted by bitrate.
+    """
+    if experiment not in test_cases:
+        return []
+    
+    test_case = test_cases[experiment]
+    sender_config = test_case.get('sender', {})
+    
+    if sender_config.get('mode') != 'simulcast':
+        return []
+    
+    simulcast_presets = sender_config.get('simulcast_presets', [])
+    simulcast_configs = config.get('simulcast_configs_presets', {})
+    
+    # Find all qualities and their bitrates
+    all_qualities = []
+    for preset_name in simulcast_presets:
+        if preset_name in simulcast_configs:
+            preset = simulcast_configs[preset_name]
+            qualities = preset.get('qualities', [])
+            
+            for quality in qualities:
+                name = quality.get('name')
+                bitrate = quality.get('bitrate', 0)
+                if name and name not in [q['name'] for q in all_qualities]:
+                    all_qualities.append({'name': name, 'bitrate': bitrate})
+    
+    # Sort qualities by bitrate
+    return sorted(all_qualities, key=lambda q: q['bitrate'])
+
 
 def load_experiments_data(experiments, base_path):
     """Load experiment data from log files, hardcoded to flow 0 only."""
@@ -126,10 +165,17 @@ def load_experiments_data(experiments, base_path):
                 key = f"{side}_{kind}"
                 if key in logs:
                     if kind == "rtp":
+                        def string_to_bool(value):
+                            if isinstance(value, str):
+                                return value.lower() == 'true'
+                            return bool(value)
+
+
                         df = pd.read_csv(logs[key], header=None, names=[
                             "time", "payload_type", "ssrc", "seq", "timestamp",
-                            "marker", "size", "twcc", "unwrapped_seq", "csrc"
-                        ])
+                            "marker", "size", "twcc", "unwrapped_seq", "csrc", "isRTX", "isFEC"
+                        ], converters={'isRTX': string_to_bool, 'isFEC': string_to_bool})
+
                         df["time"] = pd.to_datetime(df["time"], unit="ms")
                     else:
                         df = pd.read_csv(logs[key], header=None, names=["time", "size"])
@@ -144,7 +190,7 @@ def compute_bitrates(experiment_data, window_ms=500):
     """Compute bitrates for all experiments."""
     for exp_name, data in experiment_data.items():
         if "sender_rtp" in data:
-            df = data["sender_rtp"]
+            df = data["sender_rtp"].copy()
             df["time_bin"] = df["time"].dt.floor(f"{window_ms}ms")
             
             # Compute overall bitrate
@@ -239,52 +285,45 @@ def compute_interarrival_jitter(experiment_data):
             data["ssrc_jitter"] = ssrc_jitter
 
 def compute_one_way_delay(experiment_data):
-    """Compute one-way delay of RTP packets as the difference between timestamps in sender_rtp and receiver_rtp."""
+    """Compute one-way delay of RTP packets as the difference between timestamps in sender_rtp and receiver_rtp.
+    Uses twccNr for matching packets between sender and receiver instead of unwrappedSeqNr."""
     for exp_name, data in experiment_data.items():
         if "sender_rtp" in data and "receiver_rtp" in data:
             sender_df = data["sender_rtp"]
             receiver_df = data["receiver_rtp"]
             
-            # Calculate one-way delay per SSRC
-            ssrc_one_way_delay = {}
+            # Merge sender and receiver data based on twccNr
+            merged_df = pd.merge(
+                sender_df[["time", "ssrc", "twcc", "timestamp"]],
+                receiver_df[["time", "ssrc", "twcc", "timestamp"]],
+                on="twcc",
+                suffixes=("_sender", "_receiver")
+            )
             
-            # Get unique SSRCs that exist in both sender and receiver
-            common_ssrcs = set(sender_df["ssrc"].unique()).intersection(set(receiver_df["ssrc"].unique()))
-            
-            for ssrc in common_ssrcs:
-                # Filter data for this SSRC
-                sender_ssrc = sender_df[sender_df["ssrc"] == ssrc]
-                receiver_ssrc = receiver_df[receiver_df["ssrc"] == ssrc]
-                
-                # Merge sender and receiver data based on sequence number
-                merged_df = pd.merge(
-                    sender_ssrc[["time", "seq", "timestamp", "unwrapped_seq"]],
-                    receiver_ssrc[["time", "seq", "timestamp", "unwrapped_seq"]],
-                    on="unwrapped_seq",
-                    suffixes=("_sender", "_receiver")
+            if not merged_df.empty:
+                # Calculate one-way delay in milliseconds
+                merged_df["one_way_delay_ms"] = (
+                    (merged_df["time_receiver"] - merged_df["time_sender"]).dt.total_seconds() * 1000
                 )
                 
-                if not merged_df.empty:
-                    # Calculate one-way delay in milliseconds
-                    merged_df["one_way_delay_ms"] = (
-                        (merged_df["time_receiver"] - merged_df["time_sender"]).dt.total_seconds() * 1000
-                    )
-                    
-                    # Store the result
-                    ssrc_one_way_delay[ssrc] = merged_df[["time_receiver", "one_way_delay_ms"]]
-            
-            data["ssrc_one_way_delay"] = ssrc_one_way_delay
+                # Store the result as a single DataFrame
+                data["one_way_delay"] = merged_df[["time_receiver", "ssrc_sender", "one_way_delay_ms"]]
 
 def create_quality_timeline(experiment_data, config, test_cases):
     """Create a timeline of quality changes for each stream (SSRC).
     
     This function tracks all CSRCs for each SSRC and creates a new timeline entry
     whenever the CSRC (and thus quality) changes for an SSRC.
+    
+    RTX and FEC packets are excluded from the timeline.
     """
     for exp_name, data in experiment_data.items():
         if "sender_rtp" in data:
             df = data["sender_rtp"]
-            
+
+            print(df['isRTX'].describe())
+            df = df[~df["isRTX"] & ~df["isFEC"]]
+
             # Create a timeline DataFrame
             timeline_data = []
             
@@ -335,7 +374,7 @@ def create_quality_timeline(experiment_data, config, test_cases):
             timeline_df = pd.DataFrame(timeline_data)
             data["quality_timeline"] = timeline_df
 
-def plot_experiment_results(experiment_data, path_characteristics_map, test_cases):
+def plot_experiment_results(config, experiment_data, path_characteristics_map, test_cases):
     """Plot bitrates, path characteristics, lost packets, jitter, one-way delay, and quality timeline for all experiments."""
     for exp_name, data in experiment_data.items():
         # Check if this experiment has simulcast mode
@@ -346,7 +385,7 @@ def plot_experiment_results(experiment_data, path_characteristics_map, test_case
             is_simulcast = sender_config.get('mode') == 'simulcast'
         
         # Determine number of subplots based on whether we're showing quality timeline and one-way delay
-        has_one_way_delay = "ssrc_one_way_delay" in data and data["ssrc_one_way_delay"]
+        has_one_way_delay = "one_way_delay" in data and not data["one_way_delay"].empty
         
         if is_simulcast and has_one_way_delay:
             # Create a figure with five subplots (including quality timeline and one-way delay)
@@ -380,9 +419,28 @@ def plot_experiment_results(experiment_data, path_characteristics_map, test_case
             # Create a mapping of SSRC to category numbers (Y-axis positions)
             ssrc_cats = {ssrc: i+1 for i, ssrc in enumerate(unique_ssrcs)}
             
-            # Create a color mapping for qualities
-            colors = plt.colormaps.get_cmap('tab10').colors
-            quality_colormapping = {quality: colors[i % len(colors)] for i, quality in enumerate(unique_qualities)}
+            # Get all qualities sorted by bitrate
+            sorted_qualities = get_quality_bitrates(config, test_cases, exp_name)
+            
+            # Create a color mapping for qualities based on bitrate level
+            quality_colormapping = {}
+            for quality in unique_qualities:
+                # Find the position of this quality in the sorted list
+                position = -1
+                for i, q in enumerate(sorted_qualities):
+                    if q['name'] == quality:
+                        position = i
+                        break
+                
+                # Assign color based on position
+                if position == 0:  # Lowest bitrate
+                    quality_colormapping[quality] = 'red'
+                elif position == len(sorted_qualities) - 1:  # Highest bitrate
+                    quality_colormapping[quality] = 'green'
+                elif position > 0:  # Medium bitrate(s)
+                    quality_colormapping[quality] = 'yellow'
+                else:  # Unknown quality
+                    quality_colormapping[quality] = 'blue'
             
             # Create vertices and colors for PolyCollection
             verts = []
@@ -517,13 +575,12 @@ def plot_experiment_results(experiment_data, path_characteristics_map, test_case
         
         # Plot one-way delay if available
         if has_one_way_delay:
-            for i, (ssrc, delay_df) in enumerate(data["ssrc_one_way_delay"].items()):
-                color = colors[(i + 2) % len(colors)]
-                
-                # Plot one-way delay
-                ax4.plot(delay_df["time_receiver"], delay_df["one_way_delay_ms"], 
-                        label=f"SSRC {ssrc} One-Way Delay",
-                        color=color, linestyle='-')
+            delay_df = data["one_way_delay"]
+            
+            # Plot one-way delay as a single line
+            ax4.plot(delay_df["time_receiver"], delay_df["one_way_delay_ms"], 
+                    label="One-Way Delay (based on TWCC)",
+                    color=colors[0], linestyle='-')
             
             # Add legend for one-way delay
             ax4.legend()

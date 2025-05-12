@@ -8,7 +8,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/pion/interceptor/pkg/packetdump"
+	"github.com/aalekseevx/vibe/bwe-test/packetdump"
 	plogging "github.com/pion/logging"
 	"github.com/pion/transport/v3/vnet"
 	"github.com/pion/webrtc/v4"
@@ -29,7 +29,7 @@ func PacketLogWriter(rtpWriter, rtcpWriter io.Writer) Option {
 	return func(sndr *Sender) error {
 		formatter := logging.RTPFormatter{}
 		rtpLogger, err := packetdump.NewSenderInterceptor(
-			packetdump.RTPFormatter(formatter.RTPFormat),
+			packetdump.RTPBinaryFormatter(formatter.RTPFormat),
 			packetdump.RTPWriter(rtpWriter),
 		)
 		if err != nil {
