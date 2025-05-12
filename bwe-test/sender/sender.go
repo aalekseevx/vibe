@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cc "github.com/aalekseevx/vibe/bwe-test/interceptorcc"
+	"github.com/aalekseevx/vibe/bwe-test/pacing"
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
@@ -52,8 +53,8 @@ type Sender struct {
 	sources          []MediaSource
 	bitrateAllocator bitrateAllocator
 
-	estimator     cc.BandwidthEstimator
 	estimatorChan chan *cc.Interceptor
+	pacerChan     chan *pacing.Interceptor
 
 	registry *interceptor.Registry
 
@@ -70,8 +71,8 @@ func NewSender(opts ...Option) (*Sender, error) {
 		peerConnection: nil,
 		videoTracks:    nil,
 		sources:        nil,
-		estimator:      nil,
 		estimatorChan:  make(chan *cc.Interceptor),
+		pacerChan:      nil,
 		registry:       &interceptor.Registry{},
 		ccLogWriter:    io.Discard,
 		log:            logging.NewDefaultLoggerFactory().NewLogger("sender"),
@@ -197,11 +198,10 @@ func (s *Sender) Start(ctx context.Context) error {
 	wg, ctx := errgroup.WithContext(ctx)
 
 	wg.Go(func() error {
-		var estimator *cc.Interceptor
-		select {
-		case estimator = <-s.estimatorChan:
-		case <-ctx.Done():
-			return nil
+		estimator := <-s.estimatorChan
+		var pacer *pacing.Interceptor
+		if s.pacerChan != nil {
+			pacer = <-s.pacerChan
 		}
 		for {
 			select {
@@ -215,6 +215,9 @@ func (s *Sender) Start(ctx context.Context) error {
 					err := s.bitrateAllocator.SetTargetBitrate(targetBitrate)
 					if err != nil {
 						return fmt.Errorf("set target bitrate: %w", err)
+					}
+					if pacer != nil {
+						pacer.SetTargetBitrate(int64(targetBitrate))
 					}
 					lastBitrate = targetBitrate
 				}

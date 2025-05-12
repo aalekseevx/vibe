@@ -22,10 +22,6 @@ simulcast_configs_presets:
   standard_qualities:
     initial_quality: "chat_720p"
     qualities:
-      - name: "chat_90p"
-        bitrate: 100000
-        trace_file: "chat_90p_100.txt"
-        csrc: 1
       - name: "chat_180p"
         bitrate: 400000
         trace_file: "chat_180p_400.txt"

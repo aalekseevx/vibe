@@ -194,6 +194,7 @@ func newSender(
 			sender.SetVnet(leftVnet, []string{publicIPLeft}),
 			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
 			sender.GCC(100_000, 10_000, 50_000_000),
+			sender.Pacing(),
 			sender.CCLogWriter(ccLogger),
 			sender.SetLoggerFactory(loggerFactory),
 		)

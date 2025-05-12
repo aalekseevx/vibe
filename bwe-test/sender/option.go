@@ -14,6 +14,7 @@ import (
 	"github.com/pion/webrtc/v4"
 
 	"github.com/aalekseevx/vibe/bwe-test/gcc"
+	"github.com/aalekseevx/vibe/bwe-test/pacing"
 
 	cc "github.com/aalekseevx/vibe/bwe-test/interceptorcc"
 
@@ -83,6 +84,20 @@ func GCC(initialBitrate, minBitrate, maxBitrate int) Option {
 			return err
 		}
 
+		return nil
+	}
+}
+
+func Pacing() Option {
+	return func(sndr *Sender) error {
+		pacer := pacing.NewInterceptorFactory()
+		sndr.pacerChan = make(chan *pacing.Interceptor)
+		pacer.OnNewPeerConnection(func(pacer *pacing.Interceptor) {
+			go func() {
+				sndr.pacerChan <- pacer
+			}()
+		})
+		sndr.registry.Add(pacer)
 		return nil
 	}
 }
