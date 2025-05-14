@@ -18,6 +18,9 @@ seaborn = "^0.13.2"
 pyzmq = "^26.4.0"
 
 
+[tool.poetry.group.dev.dependencies]
+black = {extras = ["jupyter"], version = "^25.1.0"}
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

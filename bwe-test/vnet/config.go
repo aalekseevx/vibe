@@ -31,10 +31,17 @@ type TestCase struct {
 	Sender                   SenderConfig `yaml:"sender"`
 }
 
+// TrackConfig defines the configuration for a single track.
+type TrackConfig struct {
+	Name            string `yaml:"name"`
+	ID              int    `yaml:"id"`
+	SimulcastPreset string `yaml:"simulcast_preset"`
+}
+
 // SenderConfig defines the configuration for the sender.
 type SenderConfig struct {
-	Mode             string   `yaml:"mode"`
-	SimulcastPresets []string `yaml:"simulcast_presets,omitempty"`
+	Mode   string        `yaml:"mode"`
+	Tracks []TrackConfig `yaml:"tracks,omitempty"`
 }
 
 // SimulcastConfig defines the configuration for simulcast mode.
@@ -85,24 +92,6 @@ func GetPathCharacteristic(config Config, testCase TestCase) (PathCharacteristic
 		return PathCharacteristic{}, fmt.Errorf("path characteristic preset not found: %s", testCase.PathCharacteristicPreset)
 	}
 	return preset, nil
-}
-
-// GetSimulcastConfigs returns the simulcast configs for a test case.
-func GetSimulcastConfigs(config Config, testCase TestCase) ([]SimulcastConfig, error) {
-	if testCase.Sender.Mode != "simulcast" {
-		return nil, nil
-	}
-
-	presets := make([]SimulcastConfig, len(testCase.Sender.SimulcastPresets))
-	for i, presetName := range testCase.Sender.SimulcastPresets {
-		preset, ok := config.SimulcastConfigsPresets[presetName]
-		if !ok {
-			return nil, fmt.Errorf("simulcast preset not found: %s", presetName)
-		}
-		presets[i] = preset
-	}
-
-	return presets, nil
 }
 
 // ParseSenderMode converts a string sender mode to the corresponding enum value.

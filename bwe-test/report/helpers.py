@@ -1,4 +1,3 @@
-
 import pandas as pd
 import yaml
 import numpy as np
@@ -51,14 +50,13 @@ def extract_path_characteristics(test_case, config):
             duration = int(duration_str[:-1])
         else:
             duration = int(duration_str)
-        
-        # Extract capacity in bits per second
+    
         capacity = phase.get('capacity', 0)
-        
+    
         # Add start point of this phase
         time_points.append(current_time)
         capacity_points.append(capacity / 1000)  # Convert to kbps
-        
+    
         # Add end point of this phase
         current_time += duration
         time_points.append(current_time)
@@ -69,30 +67,33 @@ def extract_path_characteristics(test_case, config):
         'capacity_kbps': capacity_points
     }
 
-def get_quality_name_from_csrc(config, test_cases, experiment, csrc):
-    """Get the quality name for a given CSRC from the test case configuration."""
+def get_quality_name_from_qualityID(config, test_cases, experiment, qualityID):
+    """Get the quality name for a given qualityID from the test case configuration."""
     if experiment not in test_cases:
-        return f"Unknown (CSRC: {csrc})"
+        return f"Unknown (qualityID: {qualityID})"
     
     test_case = test_cases[experiment]
     sender_config = test_case.get('sender', {})
     
     if sender_config.get('mode') != 'simulcast':
-        return f"Default (CSRC: {csrc})"
+        return f"Default (qualityID: {qualityID})"
     
-    simulcast_presets = sender_config.get('simulcast_presets', [])
+    # Get tracks with simulcast presets
+    tracks = sender_config.get('tracks', [])
     simulcast_configs = config.get('simulcast_configs_presets', {})
     
-    for preset_name in simulcast_presets:
-        if preset_name in simulcast_configs:
+    # Find the quality in the tracks' simulcast presets
+    for track in tracks:
+        preset_name = track.get('simulcast_preset')
+        if preset_name and preset_name in simulcast_configs:
             preset = simulcast_configs[preset_name]
             qualities = preset.get('qualities', [])
             
             for quality in qualities:
-                if quality.get('csrc') == csrc:
-                    return quality.get('name', f"Unknown (CSRC: {csrc})")
+                if quality.get('id') == qualityID:
+                    return quality.get('name', f"Unknown (qualityID: {qualityID})")
     
-    return f"Unknown (CSRC: {csrc})"
+    return f"Unknown (qualityID: {qualityID})"
 
 def get_quality_bitrates(config, test_cases, experiment):
     """Get all qualities and their bitrates for an experiment.
@@ -114,13 +115,17 @@ def get_quality_bitrates(config, test_cases, experiment):
     if sender_config.get('mode') != 'simulcast':
         return []
     
-    simulcast_presets = sender_config.get('simulcast_presets', [])
+    # Get tracks with simulcast presets
+    tracks = sender_config.get('tracks', [])
     simulcast_configs = config.get('simulcast_configs_presets', {})
     
     # Find all qualities and their bitrates
     all_qualities = []
-    for preset_name in simulcast_presets:
-        if preset_name in simulcast_configs:
+    
+    # Find qualities in the tracks' simulcast presets
+    for track in tracks:
+        preset_name = track.get('simulcast_preset')
+        if preset_name and preset_name in simulcast_configs:
             preset = simulcast_configs[preset_name]
             qualities = preset.get('qualities', [])
             
@@ -139,12 +144,10 @@ def load_experiments_data(experiments, base_path):
     experiment_data = {}
 
     for experiment in experiments:
-        # Construct full path
         exp_path = Path(base_path) / experiment
         flow_id = 0  # Hardcoded to flow 0
         logs = {}
 
-        # Find all log files for flow 0
         for log_file in exp_path.glob(f"{flow_id}_*.log"):
             parts = log_file.stem.split("_", 1)
             if len(parts) != 2:
@@ -152,7 +155,6 @@ def load_experiments_data(experiments, base_path):
             _, log_type = parts
             logs[log_type] = log_file
 
-        # Parse logs for flow 0
         flow_data = {}
 
         if "cc" in logs:
@@ -173,7 +175,7 @@ def load_experiments_data(experiments, base_path):
 
                         df = pd.read_csv(logs[key], header=None, names=[
                             "time", "payload_type", "ssrc", "seq", "timestamp",
-                            "marker", "size", "twcc", "unwrapped_seq", "csrc", "isRTX", "isFEC"
+                            "marker", "size", "twcc", "unwrapped_seq", "trackID", "qualityID", "isRTX", "isFEC"
                         ], converters={'isRTX': string_to_bool, 'isFEC': string_to_bool})
 
                         df["time"] = pd.to_datetime(df["time"], unit="ms")
@@ -182,12 +184,57 @@ def load_experiments_data(experiments, base_path):
                         df["time"] = pd.to_datetime(df["time"], unit="ms")
                     flow_data[key] = df
 
+        # Fix isRTX and isFEC flags on receiver side
+        if "sender_rtp" in flow_data and "receiver_rtp" in flow_data:
+            flow_data["receiver_rtp"] = fix_receiver_rtx_fec_flags(
+                flow_data["sender_rtp"], 
+                flow_data["receiver_rtp"]
+            )
+
         experiment_data[experiment] = flow_data
 
     return experiment_data
 
+def fix_receiver_rtx_fec_flags(sender_df, receiver_df):
+    """Fix isRTX and isFEC flags on receiver side by using values from sender side.
+    
+    This function addresses a bug where isRTX and isFEC flags are not set correctly
+    on the receiver side. It joins sender and receiver dataframes based on ssrc and
+    unwrapped_seq, then updates the receiver flags with the sender values.
+    
+    Args:
+        sender_df: DataFrame containing sender RTP log data
+        receiver_df: DataFrame containing receiver RTP log data
+        
+    Returns:
+        Updated receiver DataFrame with corrected isRTX and isFEC flags
+    """
+    # Create a copy of the receiver dataframe to avoid modifying the original
+    receiver_df_fixed = receiver_df.copy()
+    
+    # Extract only the columns we need from the sender dataframe
+    sender_flags = sender_df[['ssrc', 'unwrapped_seq', 'isRTX', 'isFEC']].copy()
+    
+    # Merge the dataframes on ssrc and unwrapped_seq
+    merged = pd.merge(
+        receiver_df_fixed,
+        sender_flags,
+        on=['ssrc', 'unwrapped_seq'],
+        how='left',
+        suffixes=('_receiver', '_sender')
+    )
+    
+    # Update the receiver flags with the sender values where matches exist
+    mask = ~merged['isRTX_sender'].isna()
+    receiver_df_fixed.loc[mask, 'isRTX'] = merged.loc[mask, 'isRTX_sender'].astype(bool)
+    
+    mask = ~merged['isFEC_sender'].isna()
+    receiver_df_fixed.loc[mask, 'isFEC'] = merged.loc[mask, 'isFEC_sender'].astype(bool)
+    
+    return receiver_df_fixed
+
 def compute_bitrates(experiment_data, window_ms=500):
-    """Compute bitrates for all experiments."""
+    """Compute bitrates for all experiments, including per-track bitrates and RTX/FEC bitrates."""
     for exp_name, data in experiment_data.items():
         if "sender_rtp" in data:
             df = data["sender_rtp"].copy()
@@ -198,62 +245,82 @@ def compute_bitrates(experiment_data, window_ms=500):
             bitrate_df["bitrate_kbps"] = (bitrate_df["size"] * 8) / (window_ms / 1000) / 1000
             data["bitrate"] = bitrate_df
             
-            # Compute bitrate per SSRC
-            ssrc_bitrates = {}
-            for ssrc, group in df.groupby("ssrc"):
-                ssrc_df = group.groupby("time_bin")["size"].sum().reset_index()
-                ssrc_df["bitrate_kbps"] = (ssrc_df["size"] * 8) / (window_ms / 1000) / 1000
-                ssrc_bitrates[ssrc] = ssrc_df
-            data["ssrc_bitrates"] = ssrc_bitrates
+            track_bitrates = {}
+            track_bitrates_df = pd.DataFrame()
+            
+            all_time_bins = df["time_bin"].unique()
+            track_bitrates_df["time_bin"] = all_time_bins
+            track_bitrates_df = track_bitrates_df.sort_values("time_bin").reset_index(drop=True)
+            
+            media_df = df[~df["isRTX"] & ~df["isFEC"]]
+            
+            for trackID, group in media_df.groupby("trackID"):
+                track_df = group.groupby("time_bin")["size"].sum().reset_index()
+                track_df["bitrate_kbps"] = (track_df["size"] * 8) / (window_ms / 1000) / 1000
+                
+                track_bitrates[trackID] = track_df
+                
+                column_name = f"bitrate_kbps_track_{trackID}"
+                track_bitrates_df = pd.merge(
+                    track_bitrates_df, 
+                    track_df[["time_bin", "bitrate_kbps"]].rename(columns={"bitrate_kbps": column_name}), 
+                    on="time_bin", 
+                    how="left"
+                )
+                track_bitrates_df[column_name] = track_bitrates_df[column_name].fillna(0)
+            
+            data["track_bitrates"] = track_bitrates
+            data["track_bitrates_df"] = track_bitrates_df
+            
+            # Compute RTX bitrate
+            rtx_df = df[df["isRTX"]]
+            if not rtx_df.empty:
+                rtx_bitrate = rtx_df.groupby("time_bin")["size"].sum().reset_index()
+                rtx_bitrate["bitrate_kbps"] = (rtx_bitrate["size"] * 8) / (window_ms / 1000) / 1000
+                data["rtx_bitrate"] = rtx_bitrate
+            
+            # Compute FEC bitrate
+            fec_df = df[df["isFEC"]]
+            if not fec_df.empty:
+                fec_bitrate = fec_df.groupby("time_bin")["size"].sum().reset_index()
+                fec_bitrate["bitrate_kbps"] = (fec_bitrate["size"] * 8) / (window_ms / 1000) / 1000
+                data["fec_bitrate"] = fec_bitrate
 
 def compute_lost_packets(experiment_data):
-    """Compute cumulative lost packets for all experiments, separated by SSRC."""
+    """Compute lost packets for all experiments using transport-wide congestion control (TWCC) sequence numbers.
+    
+    This function calculates cumulative lost packets based on TWCC sequence numbers.
+    
+    Args:
+        experiment_data: Dictionary containing experiment data
+    """
     for exp_name, data in experiment_data.items():
         if "receiver_rtp" in data:
-            df = data["receiver_rtp"]
-            
-            # Calculate lost packets per SSRC
-            ssrc_lost_packets = {}
-            
-            for ssrc, group in df.groupby("ssrc"):
-                # Sort by unwrapped sequence number to ensure correct order
-                group = group.sort_values("unwrapped_seq")
-                
-                # Calculate min unwrapped sequence number for this SSRC
-                min_seq = group["unwrapped_seq"].min()
-                
-                # Calculate expected packets at each point
-                group["expected_packets"] = group["unwrapped_seq"] - min_seq + 1
-                
-                # Calculate received packets (cumulative count)
-                group["received_packets"] = np.arange(1, len(group) + 1)
-                
-                # Calculate lost packets
-                group["lost_packets"] = group["expected_packets"] - group["received_packets"]
-                
-                # Store the result
-                ssrc_lost_packets[ssrc] = group[["time", "lost_packets"]]
-            
-            data["ssrc_lost_packets"] = ssrc_lost_packets
+            df = data["receiver_rtp"].copy() 
+            min_twcc = df["twcc"].min()
+            df["expected_packets"] = df["twcc"] - min_twcc + 1
+            df["received_packets"] = np.arange(1, len(df) + 1)
+            df["lost_packets"] = df["expected_packets"] - df["received_packets"]
+            data["lost_packets"] = df[["time", "lost_packets"]].copy()
 
 def compute_interarrival_jitter(experiment_data):
-    """Compute interarrival jitter according to RFC 3550, separated by SSRC."""
+    """Compute interarrival jitter according to RFC 3550, separated by trackID.
+    
+    RTX and FEC packets are excluded from the jitter calculation.
+    """
     for exp_name, data in experiment_data.items():
         if "receiver_rtp" in data:
-            df = data["receiver_rtp"]
+            df = data["receiver_rtp"].copy()
+            df = df[~df["isRTX"] & ~df["isFEC"]]
             
-            # Calculate jitter per SSRC
-            ssrc_jitter = {}
+            track_jitter = {}
             
-            for ssrc, group in df.groupby("ssrc"):
-                # Sort by time to ensure correct order
+            for trackID, group in df.groupby("trackID"):
                 group = group.sort_values("time")
                 
-                # Convert arrival time to milliseconds since first packet
                 first_arrival = group["time"].min()
                 group["arrival_ms"] = (group["time"] - first_arrival).dt.total_seconds() * 1000
                 
-                # Initialize jitter array
                 jitter = np.zeros(len(group))
                 
                 # Calculate jitter for each packet (starting from the second one)
@@ -273,16 +340,14 @@ def compute_interarrival_jitter(experiment_data):
                     # Update jitter using the formula J(i) = J(i-1) + (|D(i-1,i)| - J(i-1))/16
                     jitter[i] = jitter[i-1] + (abs(D) - jitter[i-1]) / 16
                 
-                # Create a DataFrame with time and jitter
                 jitter_df = pd.DataFrame({
                     "time": group["time"],
                     "jitter": jitter
                 })
                 
-                # Store the result
-                ssrc_jitter[ssrc] = jitter_df
+                track_jitter[trackID] = jitter_df
             
-            data["ssrc_jitter"] = ssrc_jitter
+            data["track_jitter"] = track_jitter
 
 def compute_one_way_delay(experiment_data):
     """Compute one-way delay of RTP packets as the difference between timestamps in sender_rtp and receiver_rtp.
@@ -292,85 +357,71 @@ def compute_one_way_delay(experiment_data):
             sender_df = data["sender_rtp"]
             receiver_df = data["receiver_rtp"]
             
-            # Merge sender and receiver data based on twccNr
             merged_df = pd.merge(
-                sender_df[["time", "ssrc", "twcc", "timestamp"]],
-                receiver_df[["time", "ssrc", "twcc", "timestamp"]],
+                sender_df[["time", "trackID", "twcc", "timestamp"]],
+                receiver_df[["time", "trackID", "twcc", "timestamp"]],
                 on="twcc",
                 suffixes=("_sender", "_receiver")
             )
             
             if not merged_df.empty:
-                # Calculate one-way delay in milliseconds
                 merged_df["one_way_delay_ms"] = (
                     (merged_df["time_receiver"] - merged_df["time_sender"]).dt.total_seconds() * 1000
                 )
                 
-                # Store the result as a single DataFrame
-                data["one_way_delay"] = merged_df[["time_receiver", "ssrc_sender", "one_way_delay_ms"]]
+                data["one_way_delay"] = merged_df[["time_receiver", "trackID_sender", "one_way_delay_ms"]]
 
 def create_quality_timeline(experiment_data, config, test_cases):
-    """Create a timeline of quality changes for each stream (SSRC).
+    """Create a timeline of quality changes for each stream (trackID).
     
-    This function tracks all CSRCs for each SSRC and creates a new timeline entry
-    whenever the CSRC (and thus quality) changes for an SSRC.
+    This function tracks all qualityIDs for each trackID and creates a new timeline entry
+    whenever the qualityID (and thus quality) changes for a trackID.
     
     RTX and FEC packets are excluded from the timeline.
     """
     for exp_name, data in experiment_data.items():
         if "sender_rtp" in data:
             df = data["sender_rtp"]
-
-            print(df['isRTX'].describe())
             df = df[~df["isRTX"] & ~df["isFEC"]]
 
-            # Create a timeline DataFrame
             timeline_data = []
             
-            # Process each SSRC separately
-            for ssrc, ssrc_df in df.groupby("ssrc"):
-                # Sort by time to ensure chronological order
-                ssrc_df = ssrc_df.sort_values("time")
+            for trackID, track_df in df.groupby("trackID"):
+                track_df = track_df.sort_values("time")
                 
-                # Track quality changes by monitoring CSRC changes
-                current_csrc = None
+                current_qualityID = None
                 segment_start = None
                 
-                for _, row in ssrc_df.iterrows():
+                for _, row in track_df.iterrows():
                     time = row["time"]
-                    csrc = row["csrc"]
+                    qualityID = row["qualityID"]
                     
-                    # If this is the first packet or CSRC has changed
-                    if current_csrc is None or csrc != current_csrc:
-                        # If we were tracking a previous segment, close it
-                        if current_csrc is not None and segment_start is not None:
-                            quality_name = get_quality_name_from_csrc(config, test_cases, exp_name, current_csrc)
+                    if current_qualityID is None or qualityID != current_qualityID:
+                        if current_qualityID is not None and segment_start is not None:
+                            quality_name = get_quality_name_from_qualityID(config, test_cases, exp_name, current_qualityID)
                             
                             timeline_data.append({
-                                "SSRC": str(ssrc),
+                                "trackID": str(trackID),
                                 "Quality": quality_name,
                                 "Start": segment_start,
-                                "Finish": time,  # End at the current time
-                                "CSRC": current_csrc
+                                "Finish": time,
+                                "qualityID": current_qualityID
                             })
                         
-                        # Start a new segment
-                        current_csrc = csrc
+                        current_qualityID = qualityID
                         segment_start = time
                 
-                # Close the final segment if there is one
-                if current_csrc is not None and segment_start is not None:
-                    quality_name = get_quality_name_from_csrc(config, test_cases, exp_name, current_csrc)
+                if current_qualityID is not None and segment_start is not None:
+                    quality_name = get_quality_name_from_qualityID(config, test_cases, exp_name, current_qualityID)
                     
                     timeline_data.append({
-                        "SSRC": str(ssrc),
+                        "trackID": str(trackID),
                         "Quality": quality_name,
                         "Start": segment_start,
-                        "Finish": ssrc_df["time"].max(),  # End at the last packet time
-                        "CSRC": current_csrc
+                        "Finish": track_df["time"].max(),
+                        "qualityID": current_qualityID
                     })
             
-            # Create a DataFrame for the timeline
             timeline_df = pd.DataFrame(timeline_data)
             data["quality_timeline"] = timeline_df
 
@@ -384,27 +435,14 @@ def plot_experiment_results(config, experiment_data, path_characteristics_map, t
             sender_config = test_case.get('sender', {})
             is_simulcast = sender_config.get('mode') == 'simulcast'
         
-        # Determine number of subplots based on whether we're showing quality timeline and one-way delay
-        has_one_way_delay = "one_way_delay" in data and not data["one_way_delay"].empty
-        
-        if is_simulcast and has_one_way_delay:
-            # Create a figure with five subplots (including quality timeline and one-way delay)
-            fig, (ax_timeline, ax1, ax2, ax3, ax4) = plt.subplots(5, 1, figsize=(12, 24), 
+        if is_simulcast:
+            fig, (ax_timeline, ax1, ax4, ax2, ax3) = plt.subplots(5, 1, figsize=(12, 24), 
                                                                 gridspec_kw={'height_ratios': [1, 2, 2, 2, 2]})
-        elif is_simulcast:
-            # Create a figure with four subplots (including quality timeline)
-            fig, (ax_timeline, ax1, ax2, ax3) = plt.subplots(4, 1, figsize=(12, 20), 
-                                                           gridspec_kw={'height_ratios': [1, 2, 2, 2]})
-        elif has_one_way_delay:
-            # Create a figure with four subplots (including one-way delay)
-            fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 20))
         else:
-            # Create a figure with three subplots (no quality timeline, no one-way delay)
-            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 16))
+            fig, (ax1, ax4, ax2, ax3) = plt.subplots(4, 1, figsize=(12, 20))
         
-        fig.suptitle(f"Experiment Results - {exp_name}", fontsize=16)
+        fig.suptitle(exp_name, fontsize=16)
         
-        # Create formatter for x-axis time display
         locator = mdates.AutoDateLocator()
         formatter = mdates.ConciseDateFormatter(locator)
         
@@ -412,20 +450,16 @@ def plot_experiment_results(config, experiment_data, path_characteristics_map, t
         if is_simulcast and "quality_timeline" in data:
             timeline_df = data["quality_timeline"]
             
-            # Get unique SSRCs and qualities
-            unique_ssrcs = timeline_df["SSRC"].unique()
+            unique_trackIDs = timeline_df["trackID"].unique()
             unique_qualities = timeline_df["Quality"].unique()
             
-            # Create a mapping of SSRC to category numbers (Y-axis positions)
-            ssrc_cats = {ssrc: i+1 for i, ssrc in enumerate(unique_ssrcs)}
+            track_cats = {trackID: i+1 for i, trackID in enumerate(unique_trackIDs)}
             
-            # Get all qualities sorted by bitrate
             sorted_qualities = get_quality_bitrates(config, test_cases, exp_name)
             
             # Create a color mapping for qualities based on bitrate level
             quality_colormapping = {}
             for quality in unique_qualities:
-                # Find the position of this quality in the sorted list
                 position = -1
                 for i, q in enumerate(sorted_qualities):
                     if q['name'] == quality:
@@ -442,26 +476,27 @@ def plot_experiment_results(config, experiment_data, path_characteristics_map, t
                 else:  # Unknown quality
                     quality_colormapping[quality] = 'blue'
             
-            # Create vertices and colors for PolyCollection
             verts = []
             bar_colors = []
             
-            # Create a list to store quality-color pairs for the legend
             legend_elements = []
             
             for _, row in timeline_df.iterrows():
-                ssrc = row["SSRC"]
+                trackID = row["trackID"]
                 quality = row["Quality"]
                 start_time = row["Start"]
                 end_time = row["Finish"]
                 
+                # Calculate polygon height - fixed height regardless of number of tracks
+                polygon_height = 0.4  # Fixed height for each polygon
+                
                 # Create a rectangle for this timeline entry
                 v = [
-                    (mdates.date2num(start_time), ssrc_cats[ssrc] - 0.4),
-                    (mdates.date2num(start_time), ssrc_cats[ssrc] + 0.4),
-                    (mdates.date2num(end_time), ssrc_cats[ssrc] + 0.4),
-                    (mdates.date2num(end_time), ssrc_cats[ssrc] - 0.4),
-                    (mdates.date2num(start_time), ssrc_cats[ssrc] - 0.4)
+                    (mdates.date2num(start_time), track_cats[trackID] - polygon_height),
+                    (mdates.date2num(start_time), track_cats[trackID] + polygon_height),
+                    (mdates.date2num(end_time), track_cats[trackID] + polygon_height),
+                    (mdates.date2num(end_time), track_cats[trackID] - polygon_height),
+                    (mdates.date2num(start_time), track_cats[trackID] - polygon_height)
                 ]
                 verts.append(v)
                 
@@ -474,120 +509,200 @@ def plot_experiment_results(config, experiment_data, path_characteristics_map, t
                 if quality not in [e.get_label() for e in legend_elements]:
                     legend_elements.append(Patch(facecolor=color, label=quality))
             
-            # Create the PolyCollection and add it to the timeline axis
             bars = PolyCollection(verts, facecolors=bar_colors)
             ax_timeline.add_collection(bars)
             ax_timeline.autoscale()
             
-            # Set up the timeline axis
             ax_timeline.set_title("Quality Timeline")
-            ax_timeline.set_yticks(list(ssrc_cats.values()))
-            ax_timeline.set_yticklabels(list(ssrc_cats.keys()))
+            ax_timeline.set_yticks(list(track_cats.values()))
+            ax_timeline.set_yticklabels(list(track_cats.keys()))
             
-            # Add a legend for quality colors
-            ax_timeline.legend(handles=legend_elements, loc='upper right')
+            ax_timeline.legend(handles=legend_elements, loc='upper left')
             
-        # Apply formatter to timeline x-axis if simulcast mode
         if is_simulcast:
             ax_timeline.xaxis.set_major_locator(locator)
             ax_timeline.xaxis.set_major_formatter(formatter)
         
-        # Setup first subplot for bitrate
+        # Setup subplots with titles and labels
         ax1.set_title("Bitrate Utilization")
         ax1.set_ylabel("Bitrate (kbps)")
         
-        # Setup second subplot for lost packets
+        ax4.set_title("One-Way Delay")
+        ax4.set_ylabel("Delay (ms)")
+        
         ax2.set_title("Cumulative Lost Packets")
         ax2.set_ylabel("Lost Packets Count")
         
-        # Setup third subplot for jitter
         ax3.set_title("Interarrival Jitter (RFC 3550)")
         ax3.set_ylabel("Jitter (ms)")
-        
-        # Setup fourth subplot for one-way delay if available
-        if has_one_way_delay:
-            ax4.set_title("One-Way Delay")
-            ax4.set_xlabel("Time")
-            ax4.set_ylabel("Delay (ms)")
-        else:
-            # If no one-way delay, set x-label on jitter subplot
-            ax3.set_xlabel("Time")
+        ax3.set_xlabel("Time")
         
         colors = plt.colormaps.get_cmap('tab10').colors
 
-        # Plot path characteristics if available for this experiment
         path_characteristics = path_characteristics_map.get(exp_name)
         if path_characteristics:
-            # Get the start time from the data
             start_time = None
             if "sender_rtp" in data:
                 start_time = data["sender_rtp"]["time"].min()
             
             if start_time is not None:
-                # Convert seconds to datetime
                 time_points = [start_time + timedelta(seconds=t) for t in path_characteristics['time']]
                 ax1.plot(time_points, path_characteristics['capacity_kbps'], 
                         label="Path Capacity", color='black', linestyle='-.', linewidth=2)
 
-        # Plot RTP bitrate on first subplot
-        if "bitrate" in data:
-            df = data["bitrate"]
-            ax1.plot(df["time_bin"], df["bitrate_kbps"], label="RTP Bitrate",
-                    color=colors[0], linestyle='-')
-
-        # Plot CC target on first subplot
+        stacked_df = None
+        stack_columns = []
+        stack_labels = []
+        stack_colors = []
+        
+        if "track_bitrates_df" in data:
+            stacked_df = data["track_bitrates_df"].copy()
+            
+            track_columns = [col for col in stacked_df.columns if col.startswith("bitrate_kbps_track_")]
+            track_labels = [f"Track {col.split('_')[-1]}" for col in track_columns]
+            
+            stack_columns.extend(track_columns)
+            stack_labels.extend(track_labels)
+            stack_colors.extend(colors[2:2+len(track_columns)])
+        else:
+            stacked_df = pd.DataFrame()
+            if "sender_rtp" in data:
+                df = data["sender_rtp"]
+                all_time_bins = df["time_bin"].unique()
+                stacked_df["time_bin"] = all_time_bins
+                stacked_df = stacked_df.sort_values("time_bin").reset_index(drop=True)
+        
+        if "rtx_bitrate" in data and not stacked_df.empty:
+            rtx_df = data["rtx_bitrate"]
+            rtx_column = "bitrate_kbps_rtx"
+            
+            stacked_df = pd.merge(
+                stacked_df,
+                rtx_df[["time_bin", "bitrate_kbps"]].rename(columns={"bitrate_kbps": rtx_column}),
+                on="time_bin",
+                how="left"
+            )
+            stacked_df[rtx_column] = stacked_df[rtx_column].fillna(0)
+            
+            stack_columns.append(rtx_column)
+            stack_labels.append("RTX")
+            stack_colors.append('red')
+        
+        if "fec_bitrate" in data and not stacked_df.empty:
+            fec_df = data["fec_bitrate"]
+            fec_column = "bitrate_kbps_fec"
+            
+            stacked_df = pd.merge(
+                stacked_df,
+                fec_df[["time_bin", "bitrate_kbps"]].rename(columns={"bitrate_kbps": fec_column}),
+                on="time_bin",
+                how="left"
+            )
+            stacked_df[fec_column] = stacked_df[fec_column].fillna(0)
+            
+            stack_columns.append(fec_column)
+            stack_labels.append("FEC")
+            stack_colors.append('blue')
+        
+        if not stacked_df.empty and stack_columns:
+            ax1.stackplot(stacked_df["time_bin"], 
+                         [stacked_df[col] for col in stack_columns],
+                         labels=stack_labels,
+                         alpha=0.7,
+                         colors=stack_colors)
+        
         if "cc_log" in data:
             cc = data["cc_log"]
             ax1.plot(cc["time"], cc["target_bitrate"] / 1000, label="Target Bitrate",
-                    color=colors[1], linestyle='--')
+                    color='green', linestyle='--', linewidth=2)
         
-        # Plot SSRC-specific data
-        if "ssrc_lost_packets" in data:
-            for i, (ssrc, lost_df) in enumerate(data["ssrc_lost_packets"].items()):
+        if "lost_packets" in data:
+            lost_df = data["lost_packets"]
+            
+            ax2_left = ax2
+            ax2_right = ax2.twinx()
+            
+            ax2_left.plot(lost_df["time"], lost_df["lost_packets"], 
+                    label="Lost Packets",
+                    color='blue', linestyle='-', linewidth=2)
+            
+            ax2_left.set_ylabel("Lost Packets Count")
+            
+            ax2_right.set_ylabel("Bitrate (kbps)")
+            
+            if "cc_log" in data:
+                cc = data["cc_log"]
+                ax2_right.plot(cc["time"], cc["target_bitrate"] / 1000, 
+                                label="Target Bitrate",
+                                color='green', linestyle='--', linewidth=2)
+            
+            path_characteristics = path_characteristics_map.get(exp_name)
+            if path_characteristics:
+                start_time = None
+                if "sender_rtp" in data:
+                    start_time = data["sender_rtp"]["time"].min()
+                
+                if start_time is not None:
+                    time_points = [start_time + timedelta(seconds=t) for t in path_characteristics['time']]
+                    ax2_right.plot(time_points, path_characteristics['capacity_kbps'], 
+                                    label="Path Capacity",
+                                    color='black', linestyle='-.', linewidth=2)
+            
+            lines1, labels1 = ax2_left.get_legend_handles_labels()
+            lines2, labels2 = ax2_right.get_legend_handles_labels()
+            ax2_left.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+        
+        if "track_jitter" in data:
+            for i, (trackID, jitter_df) in enumerate(data["track_jitter"].items()):
                 color = colors[(i + 2) % len(colors)]
                 
-                # Plot lost packets
-                ax2.plot(lost_df["time"], lost_df["lost_packets"], 
-                        label=f"SSRC {ssrc} Lost Packets",
-                        color=color, linestyle='-')
-        
-        if "ssrc_jitter" in data:
-            for i, (ssrc, jitter_df) in enumerate(data["ssrc_jitter"].items()):
-                color = colors[(i + 2) % len(colors)]
-                
-                # Plot jitter
                 ax3.plot(jitter_df["time"], jitter_df["jitter"], 
-                        label=f"SSRC {ssrc} Jitter",
+                        label=f"Track {trackID} Jitter",
                         color=color, linestyle='-')
 
-        # Add legends
-        ax1.legend()
-        ax2.legend()
-        ax3.legend()
+        ax1.legend(loc='upper left')
+        ax3.legend(loc='upper left')
         
-        # Format x-axis for all subplots to use the same time scale
-        if has_one_way_delay:
-            for ax in [ax1, ax2, ax3, ax4]:
-                ax.xaxis.set_major_formatter(formatter)
-        else:
-            for ax in [ax1, ax2, ax3]:
-                ax.xaxis.set_major_formatter(formatter)
+        for ax in [ax1, ax2, ax3, ax4]:
+            ax.xaxis.set_major_formatter(formatter)
         
-        # Plot one-way delay if available
-        if has_one_way_delay:
+        if "one_way_delay" in data and not data["one_way_delay"].empty:
             delay_df = data["one_way_delay"]
             
-            # Plot one-way delay as a single line
-            ax4.plot(delay_df["time_receiver"], delay_df["one_way_delay_ms"], 
-                    label="One-Way Delay (based on TWCC)",
+            avg_delay = delay_df.groupby("time_receiver")["one_way_delay_ms"].mean().reset_index()
+            
+            ax4_left = ax4
+            ax4_right = ax4.twinx()
+            
+            ax4_left.plot(avg_delay["time_receiver"], avg_delay["one_way_delay_ms"], 
+                    label="One-Way Delay",
                     color=colors[0], linestyle='-')
             
-            # Add legend for one-way delay
-            ax4.legend()
+            ax4_left.set_ylabel("Delay (ms)")
+            
+            ax4_right.set_ylabel("Bitrate (kbps)")
+            
+            if "cc_log" in data:
+                cc = data["cc_log"]
+                ax4_right.plot(cc["time"], cc["target_bitrate"] / 1000, 
+                                label="Target Bitrate",
+                                color='green', linestyle='--', linewidth=2)
+            
+            path_characteristics = path_characteristics_map.get(exp_name)
+            if path_characteristics:
+                start_time = None
+                if "sender_rtp" in data:
+                    start_time = data["sender_rtp"]["time"].min()
+                
+                if start_time is not None:
+                    time_points = [start_time + timedelta(seconds=t) for t in path_characteristics['time']]
+                    ax4_right.plot(time_points, path_characteristics['capacity_kbps'], 
+                                    label="Path Capacity",
+                                    color='black', linestyle='-.', linewidth=2)
+            
+            lines1, labels1 = ax4_left.get_legend_handles_labels()
+            lines2, labels2 = ax4_right.get_legend_handles_labels()
+            ax4_left.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
         
-        # Add more space for the title
-        plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust the top margin to make room for the title
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.show()
-
-# The plot_experiment_one_way_delay function has been removed as its functionality
-# is now fully integrated into the plot_experiment_results function

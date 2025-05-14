@@ -18,7 +18,7 @@ import (
 // StatisticalEncoderSource is a source that fakes a media encoder using syncodec.StatisticalCodec.
 type StatisticalEncoderSource struct {
 	codec               syncodec.Codec
-	sampleWriter        func(media.Sample, uint32) error
+	sampleWriter        func(media.Sample, []uint32) error
 	updateTargetBitrate chan int
 	newFrame            chan syncodec.Frame
 	done                chan struct{}
@@ -32,7 +32,7 @@ var errUninitializedtatisticalEncoderSource = errors.New("write on uninitialized
 func NewStatisticalEncoderSource() *StatisticalEncoderSource {
 	return &StatisticalEncoderSource{
 		codec: nil,
-		sampleWriter: func(_ media.Sample, _ uint32) error {
+		sampleWriter: func(_ media.Sample, _ []uint32) error {
 			return errUninitializedtatisticalEncoderSource
 		},
 		updateTargetBitrate: make(chan int),
@@ -49,7 +49,7 @@ func (s *StatisticalEncoderSource) SetTargetBitrate(rate int) {
 }
 
 // SetWriter sets the sample writer function.
-func (s *StatisticalEncoderSource) SetWriter(f func(sample media.Sample, csrc uint32) error) {
+func (s *StatisticalEncoderSource) SetWriter(f func(sample media.Sample, csrc []uint32) error) {
 	s.sampleWriter = f
 }
 
@@ -76,7 +76,7 @@ func (s *StatisticalEncoderSource) Start(ctx context.Context) error {
 			s.codec.SetTargetBitrate(rate)
 			s.log.Infof("target bitrate = %v", rate)
 		case frame := <-s.newFrame:
-			err := s.sampleWriter(media.Sample{Data: frame.Content, Duration: frame.Duration}, 1)
+			err := s.sampleWriter(media.Sample{Data: frame.Content, Duration: frame.Duration}, []uint32{1, 1})
 			if err != nil {
 				return err
 			}

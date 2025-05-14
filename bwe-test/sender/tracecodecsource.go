@@ -21,7 +21,7 @@ import (
 // TraceCodecSource is a source that uses trace files for different qualities.
 type TraceCodecSource struct {
 	codec        *syncodec.TraceCodec
-	sampleWriter func(media.Sample, uint32) error
+	sampleWriter func(media.Sample, []uint32) error
 	newFrame     chan syncodec.Frame
 	done         chan struct{}
 	wg           sync.WaitGroup
@@ -34,16 +34,16 @@ type QualityConfig struct {
 	Name      string `yaml:"name"`
 	Bitrate   int    `yaml:"bitrate"`
 	TraceFile string `yaml:"trace_file"`
-	CSRC      uint32 `yaml:"csrc"`
+	ID        uint32 `yaml:"id"`
 }
 
 // TraceCodecSourceOption is a function that configures a TraceCodecSource.
 type TraceCodecSourceOption func(*TraceCodecSource) error
 
 // NewTraceCodecSource creates a new TraceCodecSource with the specified options.
-func NewTraceCodecSource(tracesDir string, qualities []QualityConfig, initialQuality string) (*TraceCodecSource, error) {
+func NewTraceCodecSource(tracesDir string, trackID uint32, qualities []QualityConfig, initialQuality string) (*TraceCodecSource, error) {
 	source := &TraceCodecSource{
-		sampleWriter: func(_ media.Sample, _ uint32) error {
+		sampleWriter: func(_ media.Sample, _ []uint32) error {
 			return errors.New("write on uninitialized TraceCodecSource.WriteSample")
 		},
 		newFrame:  make(chan syncodec.Frame),
@@ -59,7 +59,7 @@ func NewTraceCodecSource(tracesDir string, qualities []QualityConfig, initialQua
 	}
 
 	// Load trace files
-	traceFiles, err := loadTraceFiles(tracesDir, qualities)
+	traceFiles, err := loadTraceFiles(tracesDir, trackID, qualities)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func NewTraceCodecSource(tracesDir string, qualities []QualityConfig, initialQua
 }
 
 // loadTraceFiles loads the specified trace files from the directory.
-func loadTraceFiles(tracesDir string, qualities []QualityConfig) (map[string]syncodec.Trace, error) {
+func loadTraceFiles(tracesDir string, trackID uint32, qualities []QualityConfig) (map[string]syncodec.Trace, error) {
 	traceFiles := make(map[string]syncodec.Trace)
 
 	// Process each specified quality
@@ -89,8 +89,9 @@ func loadTraceFiles(tracesDir string, qualities []QualityConfig) (map[string]syn
 		}
 
 		traceFiles[quality.Name] = syncodec.Trace{
-			Trace: trace,
-			CSRC:  quality.CSRC,
+			Trace:     trace,
+			TrackID:   trackID,
+			QualityID: quality.ID,
 		}
 	}
 
@@ -130,7 +131,7 @@ func (s *TraceCodecSource) GetQualities() []Quality {
 }
 
 // SetWriter sets the sample writer function.
-func (s *TraceCodecSource) SetWriter(f func(sample media.Sample, csrc uint32) error) {
+func (s *TraceCodecSource) SetWriter(f func(sample media.Sample, csrc []uint32) error) {
 	s.sampleWriter = f
 }
 
@@ -150,7 +151,7 @@ func (s *TraceCodecSource) Start(ctx context.Context) error {
 	for {
 		select {
 		case frame := <-s.newFrame:
-			err := s.sampleWriter(media.Sample{Data: frame.Content, Duration: frame.Duration}, frame.CSRC)
+			err := s.sampleWriter(media.Sample{Data: frame.Content, Duration: frame.Duration}, []uint32{frame.TrackID, frame.QualityID})
 			if err != nil {
 				return err
 			}

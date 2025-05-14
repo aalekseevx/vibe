@@ -36,7 +36,10 @@ func (f *RTPFormatter) RTPFormat(info *interceptor.StreamInfo, pkt *rtp.Packet, 
 	isRTX := info.SSRCRetransmission == pkt.SSRC
 	isFEC := info.SSRCForwardErrorCorrection == pkt.SSRC
 
-	return []byte(fmt.Sprintf("%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v\n",
+	trackID := pkt.CSRC[0]
+	qualityID := pkt.CSRC[1]
+
+	return []byte(fmt.Sprintf("%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v\n",
 		time.Now().UnixMilli(),
 		pkt.PayloadType,
 		pkt.SSRC,
@@ -46,7 +49,8 @@ func (f *RTPFormatter) RTPFormat(info *interceptor.StreamInfo, pkt *rtp.Packet, 
 		pkt.MarshalSize(),
 		twccNr,
 		unwrappedSeqNr,
-		pkt.CSRC[0],
+		trackID,
+		qualityID,
 		isRTX,
 		isFEC,
 	)), nil

@@ -13,7 +13,8 @@ import (
 
 type Trace struct {
 	*traces.Trace
-	CSRC uint32
+	TrackID   uint32
+	QualityID uint32
 }
 
 // TraceCodec implements a codec that uses pre-recorded traces for different qualities.
@@ -107,9 +108,10 @@ func (c *TraceCodec) Start() {
 
 			// Send the frame
 			c.writer.WriteFrame(Frame{
-				Content:  make([]byte, frame.Size),
-				Duration: frameDuration,
-				CSRC:     trace.CSRC,
+				Content:   make([]byte, frame.Size),
+				Duration:  frameDuration,
+				TrackID:   trace.TrackID,
+				QualityID: trace.QualityID,
 			})
 
 			c.frameIndex = (c.frameIndex + 1) % len(trace.Frames)

@@ -165,23 +165,19 @@ func newSender(
 			return sndr{}, fmt.Errorf("new abr sender: %w", err)
 		}
 	case simulcastSenderMode:
-		// Get simulcast configs for this test case
-		simulcastConfigs, err := GetSimulcastConfigs(config, testCase)
-		if err != nil {
-			return sndr{}, err
-		}
-
-		if len(simulcastConfigs) == 0 {
-			return sndr{}, errMissingSimulcastConfig
-		}
-
-		// Create trace codec sources for each config
+		// Create trace codec sources for each track
 		var traceSources []sender.SimulcastSource
-		for _, simulcastConfig := range simulcastConfigs {
+		for _, track := range testCase.Sender.Tracks {
+			preset, ok := config.SimulcastConfigsPresets[track.SimulcastPreset]
+			if !ok {
+				return sndr{}, fmt.Errorf("simulcast preset not found: %s", track.SimulcastPreset)
+			}
+
 			traceSource, err := sender.NewTraceCodecSource(
 				config.TracesDir,
-				simulcastConfig.Qualities,
-				simulcastConfig.InitialQuality,
+				uint32(track.ID),
+				preset.Qualities,
+				preset.InitialQuality,
 			)
 			if err != nil {
 				return sndr{}, fmt.Errorf("new trace codec source: %w", err)

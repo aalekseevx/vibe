@@ -4,6 +4,7 @@
 package sender
 
 import (
+	"slices"
 	"time"
 
 	"github.com/pion/randutil"
@@ -106,7 +107,7 @@ func (p *Packetizer) EnableAbsSendTime(value int) {
 }
 
 // Packetize packetizes the payload of an RTP packet and returns one or more RTP packets.
-func (p *Packetizer) Packetize(payload []byte, samples uint32, csrc uint32) []*rtp.Packet {
+func (p *Packetizer) Packetize(payload []byte, samples uint32, csrc []uint32) []*rtp.Packet {
 	// Guard against an empty payload
 	if len(payload) == 0 {
 		return nil
@@ -126,7 +127,7 @@ func (p *Packetizer) Packetize(payload []byte, samples uint32, csrc uint32) []*r
 				SequenceNumber: p.Sequencer.NextSequenceNumber(),
 				Timestamp:      p.Timestamp, // Figure out how to do timestamps
 				SSRC:           p.SSRC,
-				CSRC:           []uint32{csrc},
+				CSRC:           slices.Clone(csrc),
 			},
 			Payload: pp,
 		}

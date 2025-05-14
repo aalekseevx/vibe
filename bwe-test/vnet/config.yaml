@@ -1,61 +1,84 @@
 log_level: info
-use_sync_test: true
+use_sync_test: false
 traces_dir: "traces/chat_firefox_h264"
 
 path_characteristic_presets:
-  variable_capacity:
+  standard:
     phases:
       - duration: 40s
-        capacity: 1000000  # 1 Mbit/s
-        max_burst: 160000  # 160 Kbit
-      - duration: 20s
-        capacity: 2500000  # 2.5 Mbit/s
-        max_burst: 160000  # 160 Kbit
-      - duration: 20s
-        capacity: 600000   # 0.6 Mbit/s
-        max_burst: 160000  # 160 Kbit
-      - duration: 20s
-        capacity: 1000000  # 1 Mbit/s
-        max_burst: 160000  # 160 Kbit
+        capacity: 1000000 # 1 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 2500000 # 2.5 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 600000 # 0.6 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 1000000 # 1 Mbit/s
+        max_burst: 160000 # 160 Kbit
+
+  double:
+    phases:
+      - duration: 40s
+        capacity: 2000000 # 2 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 5000000 # 5 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 1200000 # 1.2 Mbit/s
+        max_burst: 160000 # 160 Kbit
+      - duration: 40s
+        capacity: 2000000 # 2 Mbit/s
+        max_burst: 160000 # 160 Kbit
 
 simulcast_configs_presets:
-  standard_qualities:
-    initial_quality: "chat_720p"
+  standard:
+    initial_quality: "360p"
     qualities:
-      - name: "chat_180p"
-        bitrate: 400000
+      - name: "180p"
+        bitrate: 225000
         trace_file: "chat_180p_400.txt"
-        csrc: 2
-      - name: "chat_360p"
-        bitrate: 1000000
+        id: 2
+      - name: "360p"
+        bitrate: 591000
         trace_file: "chat_360p_1000.txt"
-        csrc: 3
-      - name: "chat_720p"
-        bitrate: 2000000
+        id: 3
+      - name: "720p"
+        bitrate: 1753000
         trace_file: "chat_720p_2000.txt"
-        csrc: 4
+        id: 4
 
 test_cases:
   - name: TestVnetRunnerABR/VariableAvailableCapacitySingleFlow
     flow_mode: single
-    path_characteristic_preset: variable_capacity
+    path_characteristic_preset: standard
     sender:
       mode: abr
 
   - name: TestVnetRunnerSimulcast/VariableAvailableCapacitySingleFlow
     flow_mode: single
-    path_characteristic_preset: variable_capacity
+    path_characteristic_preset: standard
     sender:
       mode: simulcast
-      simulcast_presets:
-        - standard_qualities
+      tracks:
+        - name: "A"
+          id: 1
+          simulcast_preset: "standard"
 
   - name: TestVnetRunnerSimulcast/VariableAvailableCapacity3SimulcastTracks
     flow_mode: single
-    path_characteristic_preset: variable_capacity
+    path_characteristic_preset: double
     sender:
       mode: simulcast
-      simulcast_presets:
-        - standard_qualities
-        - standard_qualities
-        - standard_qualities
+      tracks:
+        - name: "Track A"
+          id: 1
+          simulcast_preset: "standard"
+        - name: "Track B"
+          id: 2
+          simulcast_preset: "standard"
+        - name: "Track C"
+          id: 3
+          simulcast_preset: "standard"

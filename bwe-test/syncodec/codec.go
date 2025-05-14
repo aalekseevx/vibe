@@ -10,11 +10,12 @@ import (
 	"time"
 )
 
-// Frame represents a media frame with content, duration, and CSRC.
+// Frame represents a media frame with content, duration, and quality ID.
 type Frame struct {
-	Content  []byte        // Raw frame data
-	Duration time.Duration // Duration of the frame
-	CSRC     uint32        // CSRC of the frame
+	Content   []byte        // Raw frame data
+	Duration  time.Duration // Duration of the frame
+	TrackID   uint32
+	QualityID uint32 // ID of the quality level
 }
 
 func (f Frame) String() string {

@@ -26,7 +26,7 @@ const initialBitrate = 300_000
 
 // MediaSource represents a source of media samples that can be sent over WebRTC.
 type MediaSource interface {
-	SetWriter(func(sample media.Sample, csrc uint32) error)
+	SetWriter(func(sample media.Sample, csrc []uint32) error)
 	Start(ctx context.Context) error
 }
 

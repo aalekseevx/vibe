@@ -106,7 +106,7 @@ func (s *TrackLocalStaticSample) Unbind(t webrtc.TrackLocalContext) error {
 // If one PeerConnection fails the packets will still be sent to
 // all PeerConnections. The error message will contain the ID of the failed
 // PeerConnections so you can remove them.
-func (s *TrackLocalStaticSample) WriteSample(sample media.Sample, csrc uint32) error {
+func (s *TrackLocalStaticSample) WriteSample(sample media.Sample, csrc []uint32) error {
 	s.mu.RLock()
 	packetizer := s.packetizer
 	clockRate := s.clockRate
