@@ -11,9 +11,9 @@ import (
 
 	plogging "github.com/pion/logging"
 
-	"github.com/aalekseevx/vibe/bwe-test/logging"
-	"github.com/aalekseevx/vibe/bwe-test/receiver"
-	"github.com/aalekseevx/vibe/bwe-test/sender"
+	"github.com/aalekseevx/vibe/logging"
+	"github.com/aalekseevx/vibe/receiver"
+	"github.com/aalekseevx/vibe/sender"
 )
 
 // Flow represents a WebRTC connection between a sender and receiver over a virtual network.

@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/aalekseevx/vibe/bwe-test/traces"
+	"github.com/aalekseevx/vibe/traces"
 )
 
 // mockFrameWriter is a simple implementation of FrameWriter for testing.

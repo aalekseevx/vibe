@@ -14,8 +14,8 @@ import (
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4/pkg/media"
 
-	"github.com/aalekseevx/vibe/bwe-test/syncodec"
-	"github.com/aalekseevx/vibe/bwe-test/traces"
+	"github.com/aalekseevx/vibe/syncodec"
+	"github.com/aalekseevx/vibe/traces"
 )
 
 // TraceCodecSource is a source that uses trace files for different qualities.

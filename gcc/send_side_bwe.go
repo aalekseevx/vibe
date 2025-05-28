@@ -8,7 +8,7 @@ import (
 
 	"github.com/pion/logging"
 
-	"github.com/aalekseevx/vibe/bwe-test/cc"
+	"github.com/aalekseevx/vibe/cc"
 )
 
 type SendSideController struct {

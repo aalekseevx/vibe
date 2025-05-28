@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalekseevx/vibe/bwe-test/rtpbuffer"
+	"github.com/aalekseevx/vibe/rtpbuffer"
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
 	"github.com/pion/rtp"

@@ -1,3 +1,0 @@
-[submodule "simulator/syncodecs/syncodecs"]
-	path = simulator/syncodecs/syncodecs
-	url = https://github.com/cisco/syncodecs.git

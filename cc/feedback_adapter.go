@@ -13,7 +13,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 
-	"github.com/aalekseevx/vibe/bwe-test/ntp"
+	"github.com/aalekseevx/vibe/ntp"
 )
 
 // TwccExtensionAttributesKey identifies the TWCC value in the attribute collection

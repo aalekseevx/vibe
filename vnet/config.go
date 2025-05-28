@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/aalekseevx/vibe/bwe-test/sender"
+	"github.com/aalekseevx/vibe/sender"
 	"gopkg.in/yaml.v3"
 )
 

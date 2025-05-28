@@ -8,12 +8,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/aalekseevx/vibe/bwe-test/packetdump"
+	"github.com/aalekseevx/vibe/packetdump"
 	plogging "github.com/pion/logging"
 	"github.com/pion/transport/v3/vnet"
 	"github.com/pion/webrtc/v4"
 
-	"github.com/aalekseevx/vibe/bwe-test/logging"
+	"github.com/aalekseevx/vibe/logging"
 )
 
 // Option is a function that configures a Receiver.

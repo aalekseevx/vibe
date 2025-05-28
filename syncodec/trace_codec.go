@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalekseevx/vibe/bwe-test/traces"
+	"github.com/aalekseevx/vibe/traces"
 )
 
 type Trace struct {

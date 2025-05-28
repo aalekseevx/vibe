@@ -12,7 +12,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 
-	"github.com/aalekseevx/vibe/bwe-test/sequencenumber"
+	"github.com/aalekseevx/vibe/sequencenumber"
 )
 
 // RTPFormatter formats RTP packets for logging.

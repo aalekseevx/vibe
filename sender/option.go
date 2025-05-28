@@ -8,17 +8,18 @@ import (
 	"io"
 	"time"
 
-	"github.com/aalekseevx/vibe/bwe-test/packetdump"
+	"github.com/aalekseevx/vibe/flexfec"
+	"github.com/aalekseevx/vibe/packetdump"
 	plogging "github.com/pion/logging"
 	"github.com/pion/transport/v3/vnet"
 	"github.com/pion/webrtc/v4"
 
-	"github.com/aalekseevx/vibe/bwe-test/gcc"
-	"github.com/aalekseevx/vibe/bwe-test/pacing"
+	"github.com/aalekseevx/vibe/gcc"
+	"github.com/aalekseevx/vibe/pacing"
 
-	cc "github.com/aalekseevx/vibe/bwe-test/interceptorcc"
+	cc "github.com/aalekseevx/vibe/interceptorcc"
 
-	"github.com/aalekseevx/vibe/bwe-test/logging"
+	"github.com/aalekseevx/vibe/logging"
 )
 
 // Option is a function that configures a Sender.
@@ -102,6 +103,24 @@ func Pacing() Option {
 	}
 }
 
+// FlexFEC returns an Option that configures FlexFEC with the specified parameters.
+func FlexFEC() Option {
+	return func(sndr *Sender) error {
+		fecFactory, err := flexfec.NewFecInterceptor()
+		if err != nil {
+			return err
+		}
+		sndr.fecChan = make(chan *flexfec.FecInterceptor)
+		fecFactory.OnNewPeerConnection(func(fecSender *flexfec.FecInterceptor) {
+			go func() {
+				sndr.fecChan <- fecSender
+			}()
+		})
+		sndr.registry.Add(fecFactory)
+		return nil
+	}
+}
+
 // SetVnet returns an Option that configures the virtual network for testing.
 func SetVnet(v *vnet.Net, publicIPs []string) Option {
 	return func(s *Sender) error {
@@ -119,6 +138,7 @@ func SetEncoderSource(source EncoderSource) Option {
 		s.sources = []MediaSource{source}
 		s.bitrateAllocator = &encoderBitrateAllocator{
 			source: source,
+			pacer:  nil,
 		}
 		return nil
 	}
@@ -132,7 +152,10 @@ func SetSimulcastSources(sources []SimulcastSource) Option {
 			s.sources[i] = source
 		}
 		s.bitrateAllocator = &simulcastBitrateAllocator{
-			sources: sources,
+			sources:      sources,
+			pacer:        nil,
+			fecSender:    nil,
+			fecAllocator: newFECAllocator(),
 		}
 		return nil
 	}

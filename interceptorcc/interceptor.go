@@ -15,10 +15,10 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
 
-	"github.com/aalekseevx/vibe/bwe-test/gcc"
-	"github.com/aalekseevx/vibe/bwe-test/ntp"
+	"github.com/aalekseevx/vibe/gcc"
+	"github.com/aalekseevx/vibe/ntp"
 
-	"github.com/aalekseevx/vibe/bwe-test/cc"
+	"github.com/aalekseevx/vibe/cc"
 )
 
 type options struct {

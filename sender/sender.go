@@ -13,8 +13,9 @@ import (
 	"net/http"
 	"time"
 
-	cc "github.com/aalekseevx/vibe/bwe-test/interceptorcc"
-	"github.com/aalekseevx/vibe/bwe-test/pacing"
+	"github.com/aalekseevx/vibe/flexfec"
+	cc "github.com/aalekseevx/vibe/interceptorcc"
+	"github.com/aalekseevx/vibe/pacing"
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
 	"github.com/pion/webrtc/v4"
@@ -55,6 +56,7 @@ type Sender struct {
 
 	estimatorChan chan *cc.Interceptor
 	pacerChan     chan *pacing.Interceptor
+	fecChan       chan *flexfec.FecInterceptor
 
 	registry *interceptor.Registry
 
@@ -73,6 +75,7 @@ func NewSender(opts ...Option) (*Sender, error) {
 		sources:        nil,
 		estimatorChan:  make(chan *cc.Interceptor),
 		pacerChan:      nil,
+		fecChan:        nil,
 		registry:       &interceptor.Registry{},
 		ccLogWriter:    io.Discard,
 		log:            logging.NewDefaultLoggerFactory().NewLogger("sender"),
@@ -203,6 +206,16 @@ func (s *Sender) Start(ctx context.Context) error {
 		if s.pacerChan != nil {
 			pacer = <-s.pacerChan
 		}
+		var fecSender *flexfec.FecInterceptor
+		if s.fecChan != nil {
+			fecSender = <-s.fecChan
+		}
+
+		// Initialize bitrate allocator with pacer and fecSender
+		if err := s.bitrateAllocator.Initialize(pacer, fecSender); err != nil {
+			return fmt.Errorf("initialize bitrate allocator: %w", err)
+		}
+
 		for {
 			select {
 			case now := <-ticker.C:
@@ -215,9 +228,6 @@ func (s *Sender) Start(ctx context.Context) error {
 					err := s.bitrateAllocator.SetTargetBitrate(targetBitrate)
 					if err != nil {
 						return fmt.Errorf("set target bitrate: %w", err)
-					}
-					if pacer != nil {
-						pacer.SetTargetBitrate(int64(targetBitrate))
 					}
 					lastBitrate = targetBitrate
 				}
