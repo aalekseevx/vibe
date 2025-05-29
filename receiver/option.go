@@ -71,3 +71,20 @@ func SetLoggerFactory(loggerFactory plogging.LoggerFactory) Option {
 		return nil
 	}
 }
+
+// FlexFEC returns an Option that configures FlexFEC codec registration for receiving FEC packets.
+func FlexFEC() Option {
+	return func(r *Receiver) error {
+		codecFEC := webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeFlexFEC03,
+				ClockRate:    90000,
+				SDPFmtpLine:  "repair-window=10000000",
+				RTCPFeedback: nil,
+			},
+			PayloadType: 49,
+		}
+
+		return r.mediaEngine.RegisterCodec(codecFEC, webrtc.RTPCodecTypeVideo)
+	}
+}

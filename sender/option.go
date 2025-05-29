@@ -106,10 +106,25 @@ func Pacing() Option {
 // FlexFEC returns an Option that configures FlexFEC with the specified parameters.
 func FlexFEC() Option {
 	return func(sndr *Sender) error {
+		codecFEC := webrtc.RTPCodecParameters{
+			RTPCodecCapability: webrtc.RTPCodecCapability{
+				MimeType:     webrtc.MimeTypeFlexFEC03,
+				ClockRate:    90000,
+				SDPFmtpLine:  "repair-window=10000000",
+				RTCPFeedback: nil,
+			},
+			PayloadType: 49,
+		}
+
+		if err := sndr.mediaEngine.RegisterCodec(codecFEC, webrtc.RTPCodecTypeVideo); err != nil {
+			return err
+		}
+
 		fecFactory, err := flexfec.NewFecInterceptor()
 		if err != nil {
 			return err
 		}
+
 		sndr.fecChan = make(chan *flexfec.FecInterceptor)
 		fecFactory.OnNewPeerConnection(func(fecSender *flexfec.FecInterceptor) {
 			go func() {

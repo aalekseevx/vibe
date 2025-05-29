@@ -191,6 +191,7 @@ func newSender(
 			sender.PacketLogWriter(senderRTPLogger, senderRTCPLogger),
 			sender.GCC(100_000, 10_000, 50_000_000),
 			sender.Pacing(),
+			sender.FlexFEC(),
 			sender.CCLogWriter(ccLogger),
 			sender.SetLoggerFactory(loggerFactory),
 		)
@@ -260,6 +261,7 @@ func newReceiver(
 		receiver.SetVnet(rightVnet, []string{publicIPRight}),
 		receiver.PacketLogWriter(receiverRTPLogger, receiverRTCPLogger),
 		receiver.DefaultInterceptors(),
+		receiver.FlexFEC(),
 	)
 	if err != nil {
 		return recv{}, fmt.Errorf("new receiver: %w", err)

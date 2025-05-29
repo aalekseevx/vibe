@@ -1,5 +1,5 @@
 log_level: info
-use_sync_test: false
+use_sync_test: true
 traces_dir: "traces/chat_firefox_h264"
 
 path_characteristic_presets:

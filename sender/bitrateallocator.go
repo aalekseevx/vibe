@@ -18,7 +18,7 @@ func (o fecParametersOption) overhead() float64 {
 }
 
 type fecAllocator struct {
-	options []fecParametersOption
+	optionsSortedDescByOverhead []fecParametersOption
 }
 
 func newFECAllocator() *fecAllocator {
@@ -45,17 +45,17 @@ func newFECAllocator() *fecAllocator {
 	})
 
 	return &fecAllocator{
-		options: opts,
+		optionsSortedDescByOverhead: opts,
 	}
 }
 
 func (a *fecAllocator) Allocate(mediaBitrate int, targetBitrate int) fecParametersOption {
-	for _, opt := range a.options {
+	for _, opt := range a.optionsSortedDescByOverhead {
 		if float64(mediaBitrate)*(1+opt.overhead()) <= float64(targetBitrate) {
 			return opt
 		}
 	}
-	return a.options[len(a.options)-1]
+	return a.optionsSortedDescByOverhead[len(a.optionsSortedDescByOverhead)-1]
 }
 
 type bitrateAllocator interface {

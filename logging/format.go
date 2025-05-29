@@ -36,8 +36,15 @@ func (f *RTPFormatter) RTPFormat(info *interceptor.StreamInfo, pkt *rtp.Packet, 
 	isRTX := info.SSRCRetransmission == pkt.SSRC
 	isFEC := info.SSRCForwardErrorCorrection == pkt.SSRC
 
-	trackID := pkt.CSRC[0]
-	qualityID := pkt.CSRC[1]
+	var trackID int
+	var qualityID int
+	if len(pkt.CSRC) >= 2 {
+		trackID = int(pkt.CSRC[0])
+		qualityID = int(pkt.CSRC[1])
+	} else {
+		trackID = -1
+		qualityID = -1
+	}
 
 	return []byte(fmt.Sprintf("%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v,%v\n",
 		time.Now().UnixMilli(),

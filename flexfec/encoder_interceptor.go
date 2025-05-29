@@ -32,7 +32,7 @@ type FecInterceptor struct {
 func (f *FecInterceptor) SetFecParameters(numMediaPackets, numFecPackets uint32) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	
+
 	f.numMediaPackets = numMediaPackets
 	f.numFecPackets = numFecPackets
 }
@@ -122,7 +122,7 @@ func (r *FecInterceptor) BindLocalStream(
 			})
 
 			// Check if we have enough packets to generate FEC
-			if len(stream.packetBuffer) == int(r.numMediaPackets) {
+			if len(stream.packetBuffer) >= int(r.numMediaPackets) {
 				fecPackets = stream.flexFecEncoder.EncodeFec(stream.packetBuffer, r.numFecPackets)
 				// Reset the packet buffer now that we've sent the corresponding FEC packets.
 				stream.packetBuffer = nil
