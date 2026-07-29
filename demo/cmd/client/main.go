@@ -167,6 +167,7 @@ func main() {
 					PLICount:                    rawStats.InboundRTPStreamStats.PLICount,
 					NACKCount:                   rawStats.InboundRTPStreamStats.NACKCount,
 				}
+				slog.Info("video packet loss", attr.SSRC(ssrc), slog.Int64("packets_lost", stats.PacketsLost))
 				err = statsEncoder.Encode(stats)
 				if err != nil {
 					slog.Error("encode json", attr.Error(err))
